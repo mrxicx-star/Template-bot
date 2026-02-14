@@ -93,10 +93,13 @@ async def on_message(message):
     if message.author.bot:
         return
 
+    # Maintenance Mode Fix
     if maintenance_mode and message.author.id != OWNER_ID:
         return
 
+    # ----------------------------
     # Anti-Link
+    # ----------------------------
     if anti_link and re.search(r"(https?://|discord\.gg/)", message.content):
         await message.delete()
         await message.channel.send(
@@ -105,18 +108,38 @@ async def on_message(message):
         )
         return
 
-    # Anti-Badwords
+    # ----------------------------
+    # Anti-Badwords + Auto Timeout 5 Min
+    # ----------------------------
     badwords = ["fuck", "bitch", "asshole"]
+
     if badwords_filter and any(word in message.content.lower() for word in badwords):
         await message.delete()
-        await message.channel.send(
-            f"⚠ {message.author.mention} Bad words not allowed!",
-            delete_after=3
-        )
+
+        try:
+            until = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+            await message.author.edit(timeout=until)
+
+            await message.channel.send(
+                f"🚨 {message.author.mention} used bad words!\n⏳ Timed out for **5 minutes**!",
+                delete_after=5
+            )
+
+            await send_log(
+                message.guild,
+                f"⚠ Badwords Timeout: {message.author} muted for 5 minutes"
+            )
+
+        except:
+            await message.channel.send("❌ I don't have timeout permission!")
+
         return
 
-    # Anti-Spam
+    # ----------------------------
+    # Anti-Spam + Auto Timeout 5 Min
+    # ----------------------------
     user_id = message.author.id
+
     if user_id not in spam_users:
         spam_users[user_id] = {"count": 1, "time": datetime.datetime.utcnow()}
     else:
@@ -125,13 +148,18 @@ async def on_message(message):
     diff = (datetime.datetime.utcnow() - spam_users[user_id]["time"]).seconds
 
     if diff <= 5 and spam_users[user_id]["count"] >= 6:
-        until = datetime.datetime.utcnow() + datetime.timedelta(minutes=2)
-        await message.author.edit(timeout=until)
+        try:
+            until = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+            await message.author.edit(timeout=until)
 
-        await message.channel.send(
-            f"🚨 {message.author.mention} Spamming detected! Muted 2 min."
-        )
-        await send_log(message.guild, f"🚨 Spam muted: {message.author}")
+            await message.channel.send(
+                f"🚨 {message.author.mention} Spamming detected!\n⏳ Timed out for **5 minutes**!"
+            )
+
+            await send_log(message.guild, f"🚨 Spam Timeout: {message.author}")
+
+        except:
+            pass
 
         spam_users[user_id] = {"count": 0, "time": datetime.datetime.utcnow()}
 
@@ -163,134 +191,44 @@ async def on_member_join(member):
     await send_log(member.guild, f"👋 Welcome {member.mention} joined!")
 
 # ----------------------------
-# HELP MENU
-# ----------------------------
-help_pages = [
-    {
-        "title": "🛡 Moderation Commands",
-        "description":
-        "!kick @user reason ➝ Kick member\n"
-        "!ban @user reason ➝ Ban member\n"
-        "!timeout @user 10m ➝ Temporary mute\n"
-    },
-    {
-        "title": "⚠ Warning + Strike System",
-        "description":
-        "!warn @user reason ➝ Warn user\n"
-        "!warns @user ➝ Show warnings\n"
-        "!strike @user reason ➝ Give strike\n"
-        "⚡ 3 strikes = Auto Ban\n"
-    },
-    {
-        "title": "🚨 Anti-Raid Protection",
-        "description":
-        "✅ Auto Lockdown if raid detected\n"
-        "!lockdown ➝ Manual Lockdown\n"
-        "!unlockdown ➝ Disable Lockdown\n"
-    },
-    {
-        "title": "👑 Owner Commands",
-        "description":
-        "!wl @user ➝ Toggle whitelist\n"
-        "!wl ➝ Show whitelist\n"
-        "!maintenance on/off ➝ Private/Public Server\n"
-        "!setlog #channel\n"
-        "!autorole @role\n"
-    },
-    {
-        "title": "ℹ Info Commands",
-        "description":
-        "!ping ➝ Bot latency\n"
-        "!serverinfo ➝ Server details\n"
-        "!userinfo @user ➝ User info\n"
-        "!avatar ➝ Avatar show\n"
-    }
-]
-
-class HelpView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=120)
-        self.page = 0
-
-    async def update(self, message):
-        embed = discord.Embed(
-            title=help_pages[self.page]["title"],
-            description=help_pages[self.page]["description"],
-            color=discord.Color.blurple()
-        )
-        embed.set_footer(text=f"Page {self.page+1}/{len(help_pages)}")
-        await message.edit(embed=embed, view=self)
-
-    @discord.ui.button(label="⬅ Back", style=discord.ButtonStyle.gray)
-    async def back(self, interaction, button):
-        self.page = (self.page - 1) % len(help_pages)
-        await self.update(interaction.message)
-        await interaction.response.defer()
-
-    @discord.ui.button(label="Next ➡", style=discord.ButtonStyle.gray)
-    async def next(self, interaction, button):
-        self.page = (self.page + 1) % len(help_pages)
-        await self.update(interaction.message)
-        await interaction.response.defer()
-
-@bot.command()
-async def help(ctx):
-    view = HelpView()
-    embed = discord.Embed(
-        title=help_pages[0]["title"],
-        description=help_pages[0]["description"],
-        color=discord.Color.blurple()
-    )
-    await ctx.send(embed=embed, view=view)
-
-# ----------------------------
 # OWNER COMMANDS
 # ----------------------------
-
-# ✅ Maintenance Private/Public Feature Added
 @bot.command()
-async def maintenance(ctx, mode: str):
-
-    global maintenance_mode
-
+async def lockdown(ctx):
     if ctx.author.id != OWNER_ID:
-        return await ctx.send("❌ Only Owner can use this command!")
+        return
+    await enable_lockdown(ctx.guild)
+    await ctx.send("🚨 Lockdown Enabled!")
 
-    mode = mode.lower()
+@bot.command()
+async def unlockdown(ctx):
+    if ctx.author.id != OWNER_ID:
+        return
+    await disable_lockdown(ctx.guild)
+    await ctx.send("✅ Lockdown Disabled!")
 
-    if mode == "on":
-        maintenance_mode = True
-        await ctx.send("🛠 Maintenance ON!\n🔒 Server Private Mode Enabled!")
+@bot.command()
+async def setlog(ctx, channel: discord.TextChannel):
+    global log_channel_id
+    if ctx.author.id != OWNER_ID:
+        return
+    log_channel_id = channel.id
+    await ctx.send("✅ Log channel set")
 
-        for channel in ctx.guild.channels:
-            try:
-                await channel.set_permissions(
-                    ctx.guild.default_role,
-                    view_channel=False
-                )
-            except:
-                continue
+@bot.command()
+async def autorole(ctx, role: discord.Role):
+    global auto_role_id
+    if ctx.author.id != OWNER_ID:
+        return
+    auto_role_id = role.id
+    await ctx.send("✅ AutoRole set")
 
-        await send_log(ctx.guild, "🛠 Maintenance Enabled → Server Private!")
-
-    elif mode == "off":
-        maintenance_mode = False
-        await ctx.send("✅ Maintenance OFF!\n🌍 Server Public Mode Enabled!")
-
-        for channel in ctx.guild.channels:
-            try:
-                await channel.set_permissions(
-                    ctx.guild.default_role,
-                    view_channel=True,
-                    send_messages=True
-                )
-            except:
-                continue
-
-        await send_log(ctx.guild, "✅ Maintenance Disabled → Server Public!")
-
-    else:
-        await ctx.send("❌ Use: `!maintenance on` or `!maintenance off`")
+# ----------------------------
+# INFO COMMANDS
+# ----------------------------
+@bot.command()
+async def ping(ctx):
+    await ctx.send(f"🏓 Pong {round(bot.latency*1000)}ms")
 
 # ----------------------------
 # RUN BOT
