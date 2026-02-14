@@ -26,57 +26,94 @@ badwords_filter = True
 
 log_channel_id = None
 auto_role_id = None
+OWNER_ID = None
+
+# ----------------------------
+# ANTI RAID SETTINGS
+# ----------------------------
+join_tracker = []
+raid_mode = False
+raid_limit = 5
+raid_time = 10
 
 # ----------------------------
 # BOT READY
 # ----------------------------
 @bot.event
 async def on_ready():
+    global OWNER_ID
+    app_info = await bot.application_info()
+    OWNER_ID = app_info.owner.id
+
     print(f"✅ Bot Online: {bot.user}")
+    print(f"👑 Owner Loaded: {OWNER_ID}")
 
 # ----------------------------
 # LOG SYSTEM
 # ----------------------------
 async def send_log(guild, msg):
-    global log_channel_id
     if log_channel_id:
         channel = guild.get_channel(log_channel_id)
         if channel:
             await channel.send(msg)
 
 # ----------------------------
+# LOCKDOWN FUNCTIONS
+# ----------------------------
+async def enable_lockdown(guild):
+    global raid_mode
+    raid_mode = True
+
+    for channel in guild.text_channels:
+        try:
+            await channel.set_permissions(guild.default_role, send_messages=False)
+        except:
+            continue
+
+    await send_log(guild, "🚨 ANTI-RAID TRIGGERED! Server Locked Down!")
+
+async def disable_lockdown(guild):
+    global raid_mode
+    raid_mode = False
+
+    for channel in guild.text_channels:
+        try:
+            await channel.set_permissions(guild.default_role, send_messages=True)
+        except:
+            continue
+
+    await send_log(guild, "✅ Lockdown Disabled! Server Unlocked!")
+
+# ----------------------------
 # ANTI-SPAM + ANTI-LINK + BADWORDS
 # ----------------------------
 @bot.event
 async def on_message(message):
-    global maintenance_mode
 
     if message.author.bot:
         return
 
-    if maintenance_mode and message.author.id != bot.owner_id:
+    if maintenance_mode and message.author.id != OWNER_ID:
         return
 
     # Anti-Link
-    if anti_link:
-        if re.search(r"(https?://|discord\.gg/)", message.content):
-            await message.delete()
-            await message.channel.send(
-                f"🚫 {message.author.mention} Links are not allowed!",
-                delete_after=3
-            )
-            return
+    if anti_link and re.search(r"(https?://|discord\.gg/)", message.content):
+        await message.delete()
+        await message.channel.send(
+            f"🚫 {message.author.mention} Links not allowed!",
+            delete_after=3
+        )
+        return
 
     # Anti-Badwords
     badwords = ["fuck", "bitch", "asshole"]
-    if badwords_filter:
-        if any(word in message.content.lower() for word in badwords):
-            await message.delete()
-            await message.channel.send(
-                f"⚠ {message.author.mention} Bad words not allowed!",
-                delete_after=3
-            )
-            return
+    if badwords_filter and any(word in message.content.lower() for word in badwords):
+        await message.delete()
+        await message.channel.send(
+            f"⚠ {message.author.mention} Bad words not allowed!",
+            delete_after=3
+        )
+        return
 
     # Anti-Spam
     user_id = message.author.id
@@ -88,14 +125,13 @@ async def on_message(message):
     diff = (datetime.datetime.utcnow() - spam_users[user_id]["time"]).seconds
 
     if diff <= 5 and spam_users[user_id]["count"] >= 6:
-        try:
-            await message.author.timeout(datetime.timedelta(minutes=2))
-            await message.channel.send(
-                f"🚨 {message.author.mention} Spamming detected! Muted 2 min."
-            )
-            await send_log(message.guild, f"🚨 Spam muted: {message.author}")
-        except:
-            pass
+        until = datetime.datetime.utcnow() + datetime.timedelta(minutes=2)
+        await message.author.edit(timeout=until)
+
+        await message.channel.send(
+            f"🚨 {message.author.mention} Spamming detected! Muted 2 min."
+        )
+        await send_log(message.guild, f"🚨 Spam muted: {message.author}")
 
         spam_users[user_id] = {"count": 0, "time": datetime.datetime.utcnow()}
 
@@ -105,82 +141,58 @@ async def on_message(message):
     await bot.process_commands(message)
 
 # ----------------------------
-# ANTI-NUKE SYSTEM
-# ----------------------------
-async def anti_nuke_action(guild, action_type):
-    async for entry in guild.audit_logs(limit=1, action=action_type):
-        user = entry.user
-
-        if user.bot:
-            return
-
-        if user.id in whitelist:
-            return
-
-        try:
-            await guild.ban(user, reason="🚨 Anti-Nuke Triggered")
-            await send_log(guild, f"🚨 Anti-Nuke banned: {user}")
-        except:
-            print("❌ Missing ban permissions")
-
-@bot.event
-async def on_guild_channel_delete(channel):
-    await anti_nuke_action(channel.guild, discord.AuditLogAction.channel_delete)
-
-@bot.event
-async def on_guild_role_delete(role):
-    await anti_nuke_action(role.guild, discord.AuditLogAction.role_delete)
-
-# ----------------------------
-# WELCOME SYSTEM
+# MEMBER JOIN + ANTI RAID
 # ----------------------------
 @bot.event
 async def on_member_join(member):
+    global join_tracker
+
     if auto_role_id:
         role = member.guild.get_role(auto_role_id)
         if role:
             await member.add_roles(role)
 
+    now = datetime.datetime.utcnow()
+    join_tracker.append(now)
+
+    join_tracker = [t for t in join_tracker if (now - t).seconds < raid_time]
+
+    if len(join_tracker) >= raid_limit and not raid_mode:
+        await enable_lockdown(member.guild)
+
     await send_log(member.guild, f"👋 Welcome {member.mention} joined!")
 
 # ----------------------------
-# CUSTOM HELP MENU
+# HELP MENU (FULL EXPLAIN)
 # ----------------------------
 help_pages = [
     {
         "title": "🛡 Moderation Commands",
         "description":
-        "`!kick @user reason`\n"
-        "`!ban @user reason`\n"
-        "`!unban user_id`\n"
-        "`!timeout @user 10m`\n"
-        "`!purge 10`\n"
-        "`!slowmode 5`\n"
-        "`!lock / !unlock`\n"
+        "`!kick @user reason` ➝ Kick member\n"
+        "`!ban @user reason` ➝ Ban member\n"
+        "`!timeout @user 10m` ➝ Temporary mute\n"
     },
     {
         "title": "⚠ Warning + Strike System",
         "description":
-        "`!warn @user reason`\n"
-        "`!warns @user`\n"
-        "`!clearwarns @user`\n\n"
-        "`!strike @user reason`\n"
-        "`!strikes @user`\n"
-        "`!clearstrikes @user`\n"
+        "`!warn @user reason` ➝ Warn user\n"
+        "`!warns @user` ➝ Show warnings\n"
+        "`!strike @user reason` ➝ Give strike\n"
         "⚡ 3 strikes = Auto Ban\n"
     },
     {
-        "title": "🔒 Security Commands",
+        "title": "🚨 Anti-Raid Protection",
         "description":
-        "✅ Anti-Spam Auto Timeout\n"
-        "✅ Anti-Link Protection\n"
-        "✅ Anti-Badwords Filter\n"
-        "✅ Anti-Nuke Auto Ban\n"
+        "✅ Auto Lockdown if raid detected\n"
+        "`!lockdown` ➝ Manual Lockdown\n"
+        "`!unlockdown` ➝ Disable Lockdown\n"
     },
     {
         "title": "👑 Owner Commands",
         "description":
-        "`!wl add/remove/list`\n"
+        "`!wl @user` ➝ Toggle whitelist\n"
+        "`!wl` ➝ Show whitelist\n"
         "`!maintenance on/off`\n"
         "`!setlog #channel`\n"
         "`!autorole @role`\n"
@@ -188,10 +200,10 @@ help_pages = [
     {
         "title": "ℹ Info Commands",
         "description":
-        "`!ping`\n"
-        "`!serverinfo`\n"
-        "`!userinfo @user`\n"
-        "`!avatar @user`\n"
+        "`!ping` ➝ Bot latency\n"
+        "`!serverinfo` ➝ Server details\n"
+        "`!userinfo @user` ➝ User info\n"
+        "`!avatar` ➝ Avatar show\n"
     }
 ]
 
@@ -210,13 +222,13 @@ class HelpView(discord.ui.View):
         await message.edit(embed=embed, view=self)
 
     @discord.ui.button(label="⬅ Back", style=discord.ButtonStyle.gray)
-    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def back(self, interaction, button):
         self.page = (self.page - 1) % len(help_pages)
         await self.update(interaction.message)
         await interaction.response.defer()
 
     @discord.ui.button(label="Next ➡", style=discord.ButtonStyle.gray)
-    async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def next(self, interaction, button):
         self.page = (self.page + 1) % len(help_pages)
         await self.update(interaction.message)
         await interaction.response.defer()
@@ -229,32 +241,22 @@ async def help(ctx):
         description=help_pages[0]["description"],
         color=discord.Color.blurple()
     )
-    embed.set_footer(text="Page 1")
     await ctx.send(embed=embed, view=view)
 
 # ----------------------------
-# MODERATION COMMANDS
+# COMMANDS
 # ----------------------------
 @bot.command()
 @commands.has_permissions(kick_members=True)
 async def kick(ctx, member: discord.Member, *, reason="No reason"):
     await member.kick(reason=reason)
     await ctx.send(f"✅ Kicked {member.mention}")
-    await send_log(ctx.guild, f"👢 Kick: {member} | {reason}")
 
 @bot.command()
 @commands.has_permissions(ban_members=True)
 async def ban(ctx, member: discord.Member, *, reason="No reason"):
     await member.ban(reason=reason)
     await ctx.send(f"✅ Banned {member.mention}")
-    await send_log(ctx.guild, f"⛔ Ban: {member} | {reason}")
-
-@bot.command()
-@commands.has_permissions(ban_members=True)
-async def unban(ctx, user_id: int):
-    user = await bot.fetch_user(user_id)
-    await ctx.guild.unban(user)
-    await ctx.send(f"✅ Unbanned {user}")
 
 @bot.command()
 @commands.has_permissions(moderate_members=True)
@@ -262,49 +264,17 @@ async def timeout(ctx, member: discord.Member, time: str):
     unit = time[-1]
     amount = int(time[:-1])
 
-    if unit == "m":
-        duration = datetime.timedelta(minutes=amount)
-    elif unit == "h":
-        duration = datetime.timedelta(hours=amount)
-    elif unit == "d":
-        duration = datetime.timedelta(days=amount)
-    else:
+    duration = datetime.timedelta(minutes=amount) if unit == "m" else None
+    if not duration:
         return await ctx.send("❌ Example: 10m")
 
-    await member.timeout(duration)
+    until = datetime.datetime.utcnow() + duration
+    await member.edit(timeout=until)
     await ctx.send(f"✅ Timed out {member.mention}")
 
 @bot.command()
-@commands.has_permissions(manage_messages=True)
-async def purge(ctx, amount: int):
-    await ctx.channel.purge(limit=amount)
-    await ctx.send(f"✅ Deleted {amount} messages", delete_after=3)
-
-@bot.command()
-@commands.has_permissions(manage_channels=True)
-async def slowmode(ctx, seconds: int):
-    await ctx.channel.edit(slowmode_delay=seconds)
-    await ctx.send(f"✅ Slowmode set {seconds}s")
-
-@bot.command()
-@commands.has_permissions(manage_channels=True)
-async def lock(ctx):
-    await ctx.channel.set_permissions(ctx.guild.default_role, send_messages=False)
-    await ctx.send("🔒 Channel Locked")
-
-@bot.command()
-@commands.has_permissions(manage_channels=True)
-async def unlock(ctx):
-    await ctx.channel.set_permissions(ctx.guild.default_role, send_messages=True)
-    await ctx.send("🔓 Channel Unlocked")
-
-# ----------------------------
-# WARNINGS
-# ----------------------------
-@bot.command()
 async def warn(ctx, member: discord.Member, *, reason="No reason"):
-    warnings.setdefault(member.id, [])
-    warnings[member.id].append(reason)
+    warnings.setdefault(member.id, []).append(reason)
     await ctx.send(f"⚠ Warned {member.mention}")
 
 @bot.command()
@@ -315,77 +285,67 @@ async def warns(ctx, member: discord.Member):
     await ctx.send("\n".join(user_warns))
 
 @bot.command()
-async def clearwarns(ctx, member: discord.Member):
-    warnings[member.id] = []
-    await ctx.send("✅ Cleared warnings")
-
-# ----------------------------
-# STRIKES
-# ----------------------------
-@bot.command()
 async def strike(ctx, member: discord.Member, *, reason="No reason"):
-    strikes.setdefault(member.id, [])
-    strikes[member.id].append(reason)
-
+    strikes.setdefault(member.id, []).append(reason)
     count = len(strikes[member.id])
-    await ctx.send(f"⚔ Strike {count}/3 for {member.mention}")
 
+    await ctx.send(f"⚔ Strike {count}/3 for {member.mention}")
     if count >= 3:
         await member.ban(reason="3 Strikes reached")
-        await ctx.send(f"⛔ Auto banned {member.mention}")
+        await ctx.send("⛔ Auto banned!")
 
 # ----------------------------
-# WHITELIST OWNER ONLY
-# ----------------------------
-@bot.group()
-@commands.is_owner()
-async def wl(ctx):
-    if ctx.invoked_subcommand is None:
-        await ctx.send("Usage: !wl add/remove/list")
-
-@wl.command()
-async def add(ctx, member: discord.Member):
-    whitelist.add(member.id)
-    await ctx.send("✅ Added to whitelist")
-
-@wl.command()
-async def remove(ctx, member: discord.Member):
-    whitelist.discard(member.id)
-    await ctx.send("❌ Removed from whitelist")
-
-@wl.command()
-async def list(ctx):
-    await ctx.send(str(whitelist))
-
-# ----------------------------
-# MAINTENANCE MODE
+# OWNER COMMANDS
 # ----------------------------
 @bot.command()
-@commands.is_owner()
-async def maintenance(ctx, mode: str):
-    global maintenance_mode
-    maintenance_mode = mode.lower() == "on"
-    await ctx.send(f"🛠 Maintenance: {maintenance_mode}")
+async def wl(ctx, member: discord.Member = None):
+    if ctx.author.id != OWNER_ID:
+        return
 
-# ----------------------------
-# SET LOG CHANNEL + AUTO ROLE
-# ----------------------------
+    if member is None:
+        if not whitelist:
+            return await ctx.send("⚠ Whitelist empty.")
+        return await ctx.send("\n".join([f"<@{u}>" for u in whitelist]))
+
+    if member.id in whitelist:
+        whitelist.remove(member.id)
+        await ctx.send("❌ Removed from whitelist")
+    else:
+        whitelist.add(member.id)
+        await ctx.send("✅ Added to whitelist")
+
 @bot.command()
-@commands.is_owner()
+async def lockdown(ctx):
+    if ctx.author.id != OWNER_ID:
+        return
+    await enable_lockdown(ctx.guild)
+    await ctx.send("🚨 Lockdown Enabled!")
+
+@bot.command()
+async def unlockdown(ctx):
+    if ctx.author.id != OWNER_ID:
+        return
+    await disable_lockdown(ctx.guild)
+    await ctx.send("✅ Lockdown Disabled!")
+
+@bot.command()
 async def setlog(ctx, channel: discord.TextChannel):
     global log_channel_id
+    if ctx.author.id != OWNER_ID:
+        return
     log_channel_id = channel.id
     await ctx.send("✅ Log channel set")
 
 @bot.command()
-@commands.is_owner()
 async def autorole(ctx, role: discord.Role):
     global auto_role_id
+    if ctx.author.id != OWNER_ID:
+        return
     auto_role_id = role.id
     await ctx.send("✅ AutoRole set")
 
 # ----------------------------
-# INFO COMMANDS
+# INFO
 # ----------------------------
 @bot.command()
 async def ping(ctx):
