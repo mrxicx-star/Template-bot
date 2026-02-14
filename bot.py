@@ -25,7 +25,6 @@ anti_link = True
 badwords_filter = True
 
 log_channel_id = None
-auto_role_id = None
 OWNER_ID = None
 
 # ----------------------------
@@ -90,20 +89,14 @@ async def disable_lockdown(guild):
 async def enable_maintenance(guild):
     for channel in guild.channels:
         try:
-            await channel.set_permissions(
-                guild.default_role,
-                view_channel=False
-            )
+            await channel.set_permissions(guild.default_role, view_channel=False)
         except:
             continue
 
 async def disable_maintenance(guild):
     for channel in guild.channels:
         try:
-            await channel.set_permissions(
-                guild.default_role,
-                view_channel=True
-            )
+            await channel.set_permissions(guild.default_role, view_channel=True)
         except:
             continue
 
@@ -116,7 +109,6 @@ async def anti_nuke_action(guild, action_type):
 
         if user.bot:
             return
-
         if user.id in whitelist:
             return
 
@@ -144,6 +136,15 @@ async def on_message(message):
         return
 
     if maintenance_mode and message.author.id != OWNER_ID:
+        return
+
+    # Anti-Link
+    if anti_link and re.search(r"(https?://|discord\.gg/)", message.content):
+        await message.delete()
+        await message.channel.send(
+            f"🚫 {message.author.mention} Links not allowed!",
+            delete_after=3
+        )
         return
 
     # Badwords Timeout
@@ -200,104 +201,93 @@ async def on_member_join(member):
     await send_log(member.guild, f"👋 Welcome {member.mention} joined!")
 
 # ----------------------------
-# HELP MENU RED EMBED + BUTTONS
+# HELP MENU WITH BUTTONS (RED EMBED)
 # ----------------------------
-help_pages = [
-    {
-        "title": "🛡 Moderation Commands",
-        "description":
-        "`!kick @user reason` ➝ Kick member\n"
-        "`!ban @user reason` ➝ Ban member\n"
-        "`!timeout @user 10m` ➝ Mute temporarily\n"
-    },
-    {
-        "title": "🚨 Security Protection",
-        "description":
-        "✅ Anti-Spam Auto Timeout (5min)\n"
-        "✅ Badwords Auto Timeout (5min)\n"
-        "✅ Anti-Nuke Auto Ban\n"
-        "✅ Anti-Raid Lockdown\n"
-    },
-    {
-        "title": "👑 Owner Commands",
-        "description":
-        "`!wl @user` ➝ Whitelist user\n"
-        "`!maintenance on/off` ➝ Private/Public Server\n"
-        "`!lockdown / !unlockdown`\n"
-        "`!setlog #channel`\n"
-    },
-    {
-        "title": "ℹ Info Commands",
-        "description":
-        "`!ping` ➝ Bot latency\n"
-        "`!serverinfo` ➝ Server info\n"
-        "`!userinfo @user`\n"
-        "`!avatar`\n"
-    }
-]
-
-class HelpView(discord.ui.View):
+class HelpButtons(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=120)
-        self.page = 0
 
-    async def update(self, message):
-        embed = discord.Embed(
-            title=help_pages[self.page]["title"],
-            description=help_pages[self.page]["description"],
-            color=discord.Color.red()
+    async def update_embed(self, interaction, title, desc):
+        embed = discord.Embed(title=title, description=desc, color=discord.Color.red())
+        embed.set_footer(text="🚨 Security Bot Help Menu")
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="🛡 Moderation", style=discord.ButtonStyle.danger)
+    async def moderation(self, interaction, button):
+        await self.update_embed(
+            interaction,
+            "🛡 Moderation Commands",
+            "`!kick @user reason`\n"
+            "`!ban @user reason`\n"
+            "`!timeout @user 10m`\n"
+            "`!lockdown`\n"
+            "`!unlockdown`\n"
         )
-        embed.set_footer(text=f"Page {self.page+1}/{len(help_pages)}")
-        await message.edit(embed=embed, view=self)
 
-    @discord.ui.button(label="⬅ Back", style=discord.ButtonStyle.danger)
-    async def back(self, interaction, button):
-        self.page = (self.page - 1) % len(help_pages)
-        await self.update(interaction.message)
-        await interaction.response.defer()
+    @discord.ui.button(label="🚨 Security", style=discord.ButtonStyle.danger)
+    async def security(self, interaction, button):
+        await self.update_embed(
+            interaction,
+            "🚨 Security Protection",
+            "✅ AntiSpam Timeout 5min\n"
+            "✅ Badwords Timeout 5min\n"
+            "✅ AntiLink Delete\n"
+            "✅ AntiNuke AutoBan\n"
+            "✅ AntiRaid Lockdown\n"
+        )
 
-    @discord.ui.button(label="Next ➡", style=discord.ButtonStyle.danger)
-    async def next(self, interaction, button):
-        self.page = (self.page + 1) % len(help_pages)
-        await self.update(interaction.message)
-        await interaction.response.defer()
+    @discord.ui.button(label="👑 Owner", style=discord.ButtonStyle.danger)
+    async def owner(self, interaction, button):
+        await self.update_embed(
+            interaction,
+            "👑 Owner Commands",
+            "`!wl @user`\n"
+            "`!maintenance on/off`\n"
+            "`!setlog #channel`\n"
+        )
+
+    @discord.ui.button(label="ℹ Info", style=discord.ButtonStyle.danger)
+    async def info(self, interaction, button):
+        await self.update_embed(
+            interaction,
+            "ℹ Info Commands",
+            "`!ping`\n"
+            "`!serverinfo`\n"
+            "`!userinfo @user`\n"
+            "`!avatar`\n"
+        )
 
 @bot.command()
 async def help(ctx):
-    view = HelpView()
     embed = discord.Embed(
-        title=help_pages[0]["title"],
-        description=help_pages[0]["description"],
+        title="🚨 Ultimate Security Bot Help Menu",
+        description="Click buttons below to view commands.",
         color=discord.Color.red()
     )
-    await ctx.send(embed=embed, view=view)
+    await ctx.send(embed=embed, view=HelpButtons())
 
 # ----------------------------
-# MODERATION COMMANDS
+# COMMANDS
 # ----------------------------
 @bot.command()
 @commands.has_permissions(kick_members=True)
 async def kick(ctx, member: discord.Member, *, reason="No reason"):
     await member.kick(reason=reason)
-    await ctx.send("✅ Kicked Successfully")
+    await ctx.send(f"✅ Kicked {member.mention}")
 
 @bot.command()
 @commands.has_permissions(ban_members=True)
 async def ban(ctx, member: discord.Member, *, reason="No reason"):
     await member.ban(reason=reason)
-    await ctx.send("✅ Banned Successfully")
+    await ctx.send(f"✅ Banned {member.mention}")
 
 @bot.command()
 @commands.has_permissions(moderate_members=True)
 async def timeout(ctx, member: discord.Member, time: str):
     amount = int(time[:-1])
-    unit = time[-1]
-
-    duration = datetime.timedelta(minutes=amount)
-    until = datetime.datetime.utcnow() + duration
-
+    until = datetime.datetime.utcnow() + datetime.timedelta(minutes=amount)
     await member.edit(timeout=until)
-    await ctx.send("✅ Timed Out Successfully")
+    await ctx.send(f"✅ Timed out {member.mention}")
 
 # ----------------------------
 # OWNER COMMANDS
@@ -306,7 +296,6 @@ async def timeout(ctx, member: discord.Member, time: str):
 async def wl(ctx, member: discord.Member):
     if ctx.author.id != OWNER_ID:
         return
-
     whitelist.add(member.id)
     await ctx.send("✅ User Whitelisted")
 
