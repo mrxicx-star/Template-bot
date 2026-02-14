@@ -21,10 +21,8 @@ spam_users = {}
 whitelist = set()
 
 maintenance_mode = False
-
 anti_link = True
 badwords_filter = True
-anti_spam = True
 
 log_channel_id = None
 auto_role_id = None
@@ -87,17 +85,57 @@ async def disable_lockdown(guild):
     await send_log(guild, "✅ Lockdown Disabled! Server Unlocked!")
 
 # ----------------------------
-# AUTO TIMEOUT FUNCTION
+# MAINTENANCE MODE PRIVATE ALL
 # ----------------------------
-async def auto_timeout(member, minutes, reason):
-    try:
-        until = datetime.datetime.utcnow() + datetime.timedelta(minutes=minutes)
-        await member.edit(timeout=until)
-    except:
-        pass
+async def enable_maintenance(guild):
+    for channel in guild.channels:
+        try:
+            await channel.set_permissions(
+                guild.default_role,
+                view_channel=False
+            )
+        except:
+            continue
+
+async def disable_maintenance(guild):
+    for channel in guild.channels:
+        try:
+            await channel.set_permissions(
+                guild.default_role,
+                view_channel=True
+            )
+        except:
+            continue
 
 # ----------------------------
-# ANTI-SPAM + ANTI-LINK + BADWORDS
+# ANTI NUKE SYSTEM
+# ----------------------------
+async def anti_nuke_action(guild, action_type):
+    async for entry in guild.audit_logs(limit=1, action=action_type):
+        user = entry.user
+
+        if user.bot:
+            return
+
+        if user.id in whitelist:
+            return
+
+        try:
+            await guild.ban(user, reason="🚨 Anti-Nuke Triggered")
+            await send_log(guild, f"🚨 Anti-Nuke Banned: {user}")
+        except:
+            print("❌ Missing Ban Permission")
+
+@bot.event
+async def on_guild_channel_delete(channel):
+    await anti_nuke_action(channel.guild, discord.AuditLogAction.channel_delete)
+
+@bot.event
+async def on_guild_role_delete(role):
+    await anti_nuke_action(role.guild, discord.AuditLogAction.role_delete)
+
+# ----------------------------
+# ANTI-SPAM + BADWORDS AUTO TIMEOUT (5 MIN)
 # ----------------------------
 @bot.event
 async def on_message(message):
@@ -108,69 +146,48 @@ async def on_message(message):
     if maintenance_mode and message.author.id != OWNER_ID:
         return
 
-    # ----------------------------
-    # Anti-Link
-    # ----------------------------
-    if anti_link and re.search(r"(https?://|discord\.gg/)", message.content):
-        await message.delete()
-        await message.channel.send(
-            f"🚫 {message.author.mention} Links not allowed!",
-            delete_after=3
-        )
-        await auto_timeout(message.author, 5, "Posting Links")
-        return
-
-    # ----------------------------
-    # Anti-Badwords
-    # ----------------------------
+    # Badwords Timeout
     badwords = ["fuck", "bitch", "asshole"]
     if badwords_filter and any(word in message.content.lower() for word in badwords):
         await message.delete()
+        until = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+        await message.author.edit(timeout=until)
+
         await message.channel.send(
-            f"⚠ {message.author.mention} Bad words not allowed!",
-            delete_after=3
+            f"🚨 {message.author.mention} Badword detected! Timeout 5 min."
         )
-        await auto_timeout(message.author, 5, "Bad Words Abuse")
         return
 
-    # ----------------------------
-    # Anti-Spam
-    # ----------------------------
-    if anti_spam:
-        user_id = message.author.id
+    # Anti Spam Timeout
+    user_id = message.author.id
+    if user_id not in spam_users:
+        spam_users[user_id] = {"count": 1, "time": datetime.datetime.utcnow()}
+    else:
+        spam_users[user_id]["count"] += 1
 
-        if user_id not in spam_users:
-            spam_users[user_id] = {"count": 1, "time": datetime.datetime.utcnow()}
-        else:
-            spam_users[user_id]["count"] += 1
+    diff = (datetime.datetime.utcnow() - spam_users[user_id]["time"]).seconds
 
-        diff = (datetime.datetime.utcnow() - spam_users[user_id]["time"]).seconds
+    if diff <= 5 and spam_users[user_id]["count"] >= 6:
+        until = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+        await message.author.edit(timeout=until)
 
-        if diff <= 5 and spam_users[user_id]["count"] >= 6:
-            await message.channel.send(
-                f"🚨 {message.author.mention} Spamming detected! Timeout 5 min."
-            )
-            await auto_timeout(message.author, 5, "Spam Detected")
-            await send_log(message.guild, f"🚨 Spam Timeout: {message.author}")
+        await message.channel.send(
+            f"🚨 {message.author.mention} Spam detected! Timeout 5 min."
+        )
 
-            spam_users[user_id] = {"count": 0, "time": datetime.datetime.utcnow()}
+        spam_users[user_id] = {"count": 0, "time": datetime.datetime.utcnow()}
 
-        if diff > 5:
-            spam_users[user_id] = {"count": 1, "time": datetime.datetime.utcnow()}
+    if diff > 5:
+        spam_users[user_id] = {"count": 1, "time": datetime.datetime.utcnow()}
 
     await bot.process_commands(message)
 
 # ----------------------------
-# MEMBER JOIN + RAID TRACK
+# MEMBER JOIN + ANTI RAID
 # ----------------------------
 @bot.event
 async def on_member_join(member):
     global join_tracker
-
-    if auto_role_id:
-        role = member.guild.get_role(auto_role_id)
-        if role:
-            await member.add_roles(role)
 
     now = datetime.datetime.utcnow()
     join_tracker.append(now)
@@ -183,7 +200,7 @@ async def on_member_join(member):
     await send_log(member.guild, f"👋 Welcome {member.mention} joined!")
 
 # ----------------------------
-# HELP MENU
+# HELP MENU RED EMBED + BUTTONS
 # ----------------------------
 help_pages = [
     {
@@ -191,24 +208,31 @@ help_pages = [
         "description":
         "`!kick @user reason` ➝ Kick member\n"
         "`!ban @user reason` ➝ Ban member\n"
-        "`!timeout @user 10m` ➝ Mute member\n"
+        "`!timeout @user 10m` ➝ Mute temporarily\n"
     },
     {
         "title": "🚨 Security Protection",
         "description":
-        "✅ Anti-Link Auto Timeout (5m)\n"
-        "✅ Badwords Auto Timeout (5m)\n"
-        "✅ Anti-Spam Auto Timeout (5m)\n"
-        "✅ Anti-Raid Auto Lockdown\n"
+        "✅ Anti-Spam Auto Timeout (5min)\n"
+        "✅ Badwords Auto Timeout (5min)\n"
+        "✅ Anti-Nuke Auto Ban\n"
+        "✅ Anti-Raid Lockdown\n"
     },
     {
         "title": "👑 Owner Commands",
         "description":
-        "`!wl add @user`\n"
-        "`!wl remove @user`\n"
-        "`!wl list`\n"
-        "`!wl panel` ➝ Control Panel\n"
+        "`!wl @user` ➝ Whitelist user\n"
+        "`!maintenance on/off` ➝ Private/Public Server\n"
         "`!lockdown / !unlockdown`\n"
+        "`!setlog #channel`\n"
+    },
+    {
+        "title": "ℹ Info Commands",
+        "description":
+        "`!ping` ➝ Bot latency\n"
+        "`!serverinfo` ➝ Server info\n"
+        "`!userinfo @user`\n"
+        "`!avatar`\n"
     }
 ]
 
@@ -221,18 +245,18 @@ class HelpView(discord.ui.View):
         embed = discord.Embed(
             title=help_pages[self.page]["title"],
             description=help_pages[self.page]["description"],
-            color=discord.Color.blurple()
+            color=discord.Color.red()
         )
         embed.set_footer(text=f"Page {self.page+1}/{len(help_pages)}")
         await message.edit(embed=embed, view=self)
 
-    @discord.ui.button(label="⬅ Back", style=discord.ButtonStyle.gray)
+    @discord.ui.button(label="⬅ Back", style=discord.ButtonStyle.danger)
     async def back(self, interaction, button):
         self.page = (self.page - 1) % len(help_pages)
         await self.update(interaction.message)
         await interaction.response.defer()
 
-    @discord.ui.button(label="Next ➡", style=discord.ButtonStyle.gray)
+    @discord.ui.button(label="Next ➡", style=discord.ButtonStyle.danger)
     async def next(self, interaction, button):
         self.page = (self.page + 1) % len(help_pages)
         await self.update(interaction.message)
@@ -244,90 +268,63 @@ async def help(ctx):
     embed = discord.Embed(
         title=help_pages[0]["title"],
         description=help_pages[0]["description"],
-        color=discord.Color.blurple()
+        color=discord.Color.red()
     )
     await ctx.send(embed=embed, view=view)
 
 # ----------------------------
-# CONTROL PANEL VIEW
+# MODERATION COMMANDS
 # ----------------------------
-class ControlPanel(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=120)
+@bot.command()
+@commands.has_permissions(kick_members=True)
+async def kick(ctx, member: discord.Member, *, reason="No reason"):
+    await member.kick(reason=reason)
+    await ctx.send("✅ Kicked Successfully")
 
-    async def refresh(self, interaction):
-        embed = discord.Embed(
-            title="🛡 Security Control Panel",
-            color=discord.Color.blurple()
-        )
+@bot.command()
+@commands.has_permissions(ban_members=True)
+async def ban(ctx, member: discord.Member, *, reason="No reason"):
+    await member.ban(reason=reason)
+    await ctx.send("✅ Banned Successfully")
 
-        embed.add_field(name="Anti-Link", value="✅ ON" if anti_link else "❌ OFF")
-        embed.add_field(name="Badwords", value="✅ ON" if badwords_filter else "❌ OFF")
-        embed.add_field(name="Anti-Spam", value="✅ ON" if anti_spam else "❌ OFF")
+@bot.command()
+@commands.has_permissions(moderate_members=True)
+async def timeout(ctx, member: discord.Member, time: str):
+    amount = int(time[:-1])
+    unit = time[-1]
 
-        await interaction.message.edit(embed=embed, view=self)
+    duration = datetime.timedelta(minutes=amount)
+    until = datetime.datetime.utcnow() + duration
 
-    @discord.ui.button(label="Toggle Anti-Link", style=discord.ButtonStyle.green)
-    async def toggle_link(self, interaction, button):
-        global anti_link
-        anti_link = not anti_link
-        await interaction.response.defer()
-        await self.refresh(interaction)
-
-    @discord.ui.button(label="Toggle Badwords", style=discord.ButtonStyle.red)
-    async def toggle_badwords(self, interaction, button):
-        global badwords_filter
-        badwords_filter = not badwords_filter
-        await interaction.response.defer()
-        await self.refresh(interaction)
-
-    @discord.ui.button(label="Toggle Anti-Spam", style=discord.ButtonStyle.blurple)
-    async def toggle_spam(self, interaction, button):
-        global anti_spam
-        anti_spam = not anti_spam
-        await interaction.response.defer()
-        await self.refresh(interaction)
+    await member.edit(timeout=until)
+    await ctx.send("✅ Timed Out Successfully")
 
 # ----------------------------
-# WL GROUP
+# OWNER COMMANDS
 # ----------------------------
-@bot.group()
-async def wl(ctx):
+@bot.command()
+async def wl(ctx, member: discord.Member):
     if ctx.author.id != OWNER_ID:
         return
-    if ctx.invoked_subcommand is None:
-        await ctx.send("Use: `!wl add/remove/list/panel`")
 
-@wl.command()
-async def add(ctx, member: discord.Member):
     whitelist.add(member.id)
-    await ctx.send(f"✅ Added {member.mention} to whitelist")
+    await ctx.send("✅ User Whitelisted")
 
-@wl.command()
-async def remove(ctx, member: discord.Member):
-    whitelist.discard(member.id)
-    await ctx.send(f"❌ Removed {member.mention} from whitelist")
+@bot.command()
+async def maintenance(ctx, mode: str):
+    global maintenance_mode
+    if ctx.author.id != OWNER_ID:
+        return
 
-@wl.command()
-async def list(ctx):
-    if not whitelist:
-        return await ctx.send("⚠ Whitelist empty")
+    if mode.lower() == "on":
+        maintenance_mode = True
+        await enable_maintenance(ctx.guild)
+        await ctx.send("🛠 Maintenance ON (Server Private)")
+    else:
+        maintenance_mode = False
+        await disable_maintenance(ctx.guild)
+        await ctx.send("✅ Maintenance OFF (Server Public)")
 
-    embed = discord.Embed(title="✅ Whitelisted Users", color=discord.Color.green())
-    embed.description = "\n".join([f"<@{u}>" for u in whitelist])
-    await ctx.send(embed=embed)
-
-@wl.command()
-async def panel(ctx):
-    embed = discord.Embed(title="🛡 Security Control Panel", color=discord.Color.blurple())
-    embed.description = "Click buttons to toggle protections"
-
-    view = ControlPanel()
-    await ctx.send(embed=embed, view=view)
-
-# ----------------------------
-# LOCKDOWN COMMANDS
-# ----------------------------
 @bot.command()
 async def lockdown(ctx):
     if ctx.author.id != OWNER_ID:
@@ -341,6 +338,35 @@ async def unlockdown(ctx):
         return
     await disable_lockdown(ctx.guild)
     await ctx.send("✅ Lockdown Disabled!")
+
+@bot.command()
+async def setlog(ctx, channel: discord.TextChannel):
+    global log_channel_id
+    if ctx.author.id != OWNER_ID:
+        return
+    log_channel_id = channel.id
+    await ctx.send("✅ Log Channel Set")
+
+# ----------------------------
+# INFO COMMANDS
+# ----------------------------
+@bot.command()
+async def ping(ctx):
+    await ctx.send(f"🏓 Pong {round(bot.latency*1000)}ms")
+
+@bot.command()
+async def serverinfo(ctx):
+    g = ctx.guild
+    await ctx.send(f"📌 {g.name} | Members: {g.member_count}")
+
+@bot.command()
+async def userinfo(ctx, member: discord.Member):
+    await ctx.send(f"👤 {member} Joined: {member.joined_at.date()}")
+
+@bot.command()
+async def avatar(ctx, member: discord.Member = None):
+    member = member or ctx.author
+    await ctx.send(member.avatar.url)
 
 # ----------------------------
 # RUN BOT
