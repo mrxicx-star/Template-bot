@@ -1,0 +1,186 @@
+{
+  "roles": [
+    "🍷",
+    "🔴 〢 • RUDRA ✦",
+    "⚫ 〢 • Creator",
+    "⚪ .",
+    "🔵 〢 • ADMIN ✦",
+    "🔵 〢 • MOD ✦",
+    "🟡 〢 • TRIAL MOD ✦",
+    "🟠 〢 • YOUTUBER ✦",
+    "🟠 〢 • Contenet Creator ✦",
+    "🟣 〢 • VERIFIED GIRL ✦",
+    "⚫ 〢 • Hydra Gang ✦",
+    "🔵 〢 • MALE ✦",
+    "🔴 〢 • FEMALE ✦",
+    "🔴 「LEVEL 100 | GOD」",
+    "🔴 「LEVEL 95 | LEGEND」",
+    "🔵 「LEVEL 90 | MEGA X 」",
+    "🟣 「LEVEL 85 | MEGA Y」",
+    "🔵 「LEVEL 80 | KIRA 」",
+    "🔵 「LEVEL 75 | LAWLIET L 」",
+    "🟢 「LEVEL 70 | SHINGAMI 」",
+    "🟢 「LEVEL 65 | ACE 」",
+    "🟢 「LEVEL 60 | GREAT 」",
+    "🟢 「LEVEL 55 | GRAND MASTER 」",
+    "🟢 「LEVEL 50 | CHAMPION 」",
+    "🟡 「LEVEL 45 | HACKER 」",
+    "🟠 「LEVEL 40 | PROFESSIONAL 」",
+    "🟠 「LEVEL 35 | MASTER 」",
+    "🟠 「LEVEL 30 | INSANE 」",
+    "🔴 「LEVEL 25 | EXTREME 」",
+    "🔴 「LEVEL 20 | SUPERB 」",
+    "🔴 「LEVEL 15 | COOL 」",
+    "🔴 「LEVEL 10 | NICE 」",
+    "🔴 「LEVEL 5 | BEGINNER 」",
+    "🔘 ❲➢ 「69」",
+    "🔘 ❲➢ 「22+」",
+    "🔘 ❲➢ 「19-21」",
+    "🔘 ❲➢ 「18+」",
+    "🔘 ❲➢ 「18-」",
+    "🔘 ❲➢ 👑 • CSGO ｣",
+    "🔘 ❲➢ 👑 • BGMI/PUBG ｣",
+    "🔘 ❲➢ 👑 • VALORANT ｣",
+    "🔘 ❲➢ 👑 • MINECRAFT ｣",
+    "🔘 ❲➢ 👑 • GTA ｣",
+    "🔘 ❲➢ 👑 • CALL OF DUTY ｣",
+    "🔘 ❲➢ 👑 • FREE FIRE ｣",
+    "🔘 ❲➢ 👑 • AMONG-US ｣",
+    "🔘 ❲➢ 👑 • CLASH OF CLANS ｣",
+    "🔘 ❲➢ 👑 • ANDROID ｣",
+    "🔘 ❲➢ 👑 • PC ｣",
+    "🔘 ❲➢ 👑 • XBOX ｣",
+    "🔘 ❲➢ 👑 • PlayStation ｣",
+    "🔘 ❲➢ 👑 • IOS ｣",
+    "🔘 ❲➢ 👑 • JOB-1 ｣",
+    "🔘 ❲➢ 👑 • JOB-2 ｣",
+    "🔘 ❲➢ 👑 • MUTED ｣",
+    "🔘 ❲➢ 👑 • TICK ｣",
+    "🔘 ❲➢ 👑 • WRONG ｣",
+    "🔘 Kool PPLS",
+    "🟡 Casino Topper",
+    "🔵 YourManagerMod",
+    "🟢 quotient-tag-ignore",
+    "🔘 2pm idp / 1pm idp / 4pm idp / DT IDP",
+    "🔘 Muted",
+    "🔘 Group A (IN) / Group A",
+    "🔘 Tournament Organizer",
+    "🟢 tourney-mod",
+    "🔘 new role",
+    "🟢 WS V",
+    "🔴 WS IDP",
+    "🔘 humans <@&892741630812102686>",
+    "🔘 Bots",
+    "🔘 Announcement Ping",
+    "🔘 Server Updates",
+    "🔘 Chat Revive Ping",
+    "🔘 Minecraft Java",
+    "🟢 Verified",
+    "🔘 Event Ping",
+    "🔘 Giveaway Ping",
+    "🔘 @everyone",
+    "🟣 ❲➢ 👑 • PURPLE ｣",
+    "🟠 ❲➢ 👑 • ORANGE ｣",
+    "🔴 ❲➢ 👑 • RED ｣",
+    "⚫ ❲➢ 👑 • BLACK ｣",
+    "🟡 ❲➢ 👑 • YELLOW ｣",
+    "🔵 ❲➢ 👑 • BLUE ｣",
+    "🟢 ❲➢ 👑 • GREEN ｣",
+    "⚪ ❲➢ 👑 • WHITE ｣",
+    "💗 ❲➢ 👑 • PINK ｣"
+  ],
+  "categories": [
+    {
+      "name": "SERVER SPAWN",
+      "channels": [
+        {"name": "entrance", "type": "text"},
+        {"name": "overview", "type": "text"},
+        {"name": "server-boost", "type": "text"}
+      ]
+    },
+    {
+      "name": "GATEWAY",
+      "channels": [
+        {"name": "self-role", "type": "text"},
+        {"name": "updates", "type": "text"},
+        {"name": "starboard", "type": "text"}
+      ]
+    },
+    {
+      "name": "IMPORTANT",
+      "channels": [
+        {"name": "announces", "type": "text"},
+        {"name": "giveaway", "type": "text"},
+        {"name": "invite", "type": "text"}
+      ]
+    },
+    {
+      "name": "YOUTUBE ZONE",
+      "channels": [
+        {"name": "yt-notification", "type": "text"},
+        {"name": "suggestions", "type": "text"}
+      ]
+    },
+    {
+      "name": "CHILL ZONE",
+      "channels": [
+        {"name": "chill-chat", "type": "text"},
+        {"name": "gaming-chat", "type": "text"},
+        {"name": "toxic-chat", "type": "text"}
+      ]
+    },
+    {
+      "name": "GAMING ZONE",
+      "channels": [
+        {"name": "owo", "type": "text"},
+        {"name": "aki", "type": "text"},
+        {"name": "poki", "type": "text"}
+      ]
+    },
+    {
+      "name": "LEVEL ZONE",
+      "channels": [
+        {"name": "level-up", "type": "text"},
+        {"name": "level-chack", "type": "text"}
+      ]
+    },
+    {
+      "name": "EVENT ZONE",
+      "channels": [
+        {"name": "event", "type": "text"},
+        {"name": "event-announces", "type": "text"}
+      ]
+    },
+    {
+      "name": "VOICE ZONE",
+      "channels": [
+        {"name": "General Vc", "type": "voice"},
+        {"name": "Chill Vc", "type": "voice"},
+        {"name": "Duo Vc", "type": "voice"},
+        {"name": "Trio Vc", "type": "voice"},
+        {"name": "SQud Vc", "type": "voice"}
+      ]
+    },
+    {
+      "name": "MUSIC ZONE",
+      "channels": [
+        {"name": "music-chat", "type": "text"},
+        {"name": "Music Vc", "type": "voice"}
+      ]
+    },
+    {
+      "name": "APPLICATION",
+      "channels": [
+        {"name": "report", "type": "text"},
+        {"name": "staff-apply", "type": "text"}
+      ]
+    },
+    {
+      "name": "STAFF ZONE",
+      "channels": [
+        {"name": "staff-chat", "type": "text"},
+        {"name": "staff-announces", "type": "text"}
+      ]
+    }
+  ]
+}
