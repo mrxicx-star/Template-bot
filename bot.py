@@ -163,47 +163,47 @@ async def on_member_join(member):
     await send_log(member.guild, f"👋 Welcome {member.mention} joined!")
 
 # ----------------------------
-# HELP MENU (FULL EXPLAIN)
+# HELP MENU
 # ----------------------------
 help_pages = [
     {
         "title": "🛡 Moderation Commands",
         "description":
-        "`!kick @user reason` ➝ Kick member\n"
-        "`!ban @user reason` ➝ Ban member\n"
-        "`!timeout @user 10m` ➝ Temporary mute\n"
+        "!kick @user reason ➝ Kick member\n"
+        "!ban @user reason ➝ Ban member\n"
+        "!timeout @user 10m ➝ Temporary mute\n"
     },
     {
         "title": "⚠ Warning + Strike System",
         "description":
-        "`!warn @user reason` ➝ Warn user\n"
-        "`!warns @user` ➝ Show warnings\n"
-        "`!strike @user reason` ➝ Give strike\n"
+        "!warn @user reason ➝ Warn user\n"
+        "!warns @user ➝ Show warnings\n"
+        "!strike @user reason ➝ Give strike\n"
         "⚡ 3 strikes = Auto Ban\n"
     },
     {
         "title": "🚨 Anti-Raid Protection",
         "description":
         "✅ Auto Lockdown if raid detected\n"
-        "`!lockdown` ➝ Manual Lockdown\n"
-        "`!unlockdown` ➝ Disable Lockdown\n"
+        "!lockdown ➝ Manual Lockdown\n"
+        "!unlockdown ➝ Disable Lockdown\n"
     },
     {
         "title": "👑 Owner Commands",
         "description":
-        "`!wl @user` ➝ Toggle whitelist\n"
-        "`!wl` ➝ Show whitelist\n"
-        "`!maintenance on/off`\n"
-        "`!setlog #channel`\n"
-        "`!autorole @role`\n"
+        "!wl @user ➝ Toggle whitelist\n"
+        "!wl ➝ Show whitelist\n"
+        "!maintenance on/off ➝ Private/Public Server\n"
+        "!setlog #channel\n"
+        "!autorole @role\n"
     },
     {
         "title": "ℹ Info Commands",
         "description":
-        "`!ping` ➝ Bot latency\n"
-        "`!serverinfo` ➝ Server details\n"
-        "`!userinfo @user` ➝ User info\n"
-        "`!avatar` ➝ Avatar show\n"
+        "!ping ➝ Bot latency\n"
+        "!serverinfo ➝ Server details\n"
+        "!userinfo @user ➝ User info\n"
+        "!avatar ➝ Avatar show\n"
     }
 ]
 
@@ -244,126 +244,53 @@ async def help(ctx):
     await ctx.send(embed=embed, view=view)
 
 # ----------------------------
-# COMMANDS
-# ----------------------------
-@bot.command()
-@commands.has_permissions(kick_members=True)
-async def kick(ctx, member: discord.Member, *, reason="No reason"):
-    await member.kick(reason=reason)
-    await ctx.send(f"✅ Kicked {member.mention}")
-
-@bot.command()
-@commands.has_permissions(ban_members=True)
-async def ban(ctx, member: discord.Member, *, reason="No reason"):
-    await member.ban(reason=reason)
-    await ctx.send(f"✅ Banned {member.mention}")
-
-@bot.command()
-@commands.has_permissions(moderate_members=True)
-async def timeout(ctx, member: discord.Member, time: str):
-    unit = time[-1]
-    amount = int(time[:-1])
-
-    duration = datetime.timedelta(minutes=amount) if unit == "m" else None
-    if not duration:
-        return await ctx.send("❌ Example: 10m")
-
-    until = datetime.datetime.utcnow() + duration
-    await member.edit(timeout=until)
-    await ctx.send(f"✅ Timed out {member.mention}")
-
-@bot.command()
-async def warn(ctx, member: discord.Member, *, reason="No reason"):
-    warnings.setdefault(member.id, []).append(reason)
-    await ctx.send(f"⚠ Warned {member.mention}")
-
-@bot.command()
-async def warns(ctx, member: discord.Member):
-    user_warns = warnings.get(member.id, [])
-    if not user_warns:
-        return await ctx.send("✅ No warnings.")
-    await ctx.send("\n".join(user_warns))
-
-@bot.command()
-async def strike(ctx, member: discord.Member, *, reason="No reason"):
-    strikes.setdefault(member.id, []).append(reason)
-    count = len(strikes[member.id])
-
-    await ctx.send(f"⚔ Strike {count}/3 for {member.mention}")
-    if count >= 3:
-        await member.ban(reason="3 Strikes reached")
-        await ctx.send("⛔ Auto banned!")
-
-# ----------------------------
 # OWNER COMMANDS
 # ----------------------------
+
+# ✅ Maintenance Private/Public Feature Added
 @bot.command()
-async def wl(ctx, member: discord.Member = None):
+async def maintenance(ctx, mode: str):
+
+    global maintenance_mode
+
     if ctx.author.id != OWNER_ID:
-        return
+        return await ctx.send("❌ Only Owner can use this command!")
 
-    if member is None:
-        if not whitelist:
-            return await ctx.send("⚠ Whitelist empty.")
-        return await ctx.send("\n".join([f"<@{u}>" for u in whitelist]))
+    mode = mode.lower()
 
-    if member.id in whitelist:
-        whitelist.remove(member.id)
-        await ctx.send("❌ Removed from whitelist")
+    if mode == "on":
+        maintenance_mode = True
+        await ctx.send("🛠 Maintenance ON!\n🔒 Server Private Mode Enabled!")
+
+        for channel in ctx.guild.channels:
+            try:
+                await channel.set_permissions(
+                    ctx.guild.default_role,
+                    view_channel=False
+                )
+            except:
+                continue
+
+        await send_log(ctx.guild, "🛠 Maintenance Enabled → Server Private!")
+
+    elif mode == "off":
+        maintenance_mode = False
+        await ctx.send("✅ Maintenance OFF!\n🌍 Server Public Mode Enabled!")
+
+        for channel in ctx.guild.channels:
+            try:
+                await channel.set_permissions(
+                    ctx.guild.default_role,
+                    view_channel=True,
+                    send_messages=True
+                )
+            except:
+                continue
+
+        await send_log(ctx.guild, "✅ Maintenance Disabled → Server Public!")
+
     else:
-        whitelist.add(member.id)
-        await ctx.send("✅ Added to whitelist")
-
-@bot.command()
-async def lockdown(ctx):
-    if ctx.author.id != OWNER_ID:
-        return
-    await enable_lockdown(ctx.guild)
-    await ctx.send("🚨 Lockdown Enabled!")
-
-@bot.command()
-async def unlockdown(ctx):
-    if ctx.author.id != OWNER_ID:
-        return
-    await disable_lockdown(ctx.guild)
-    await ctx.send("✅ Lockdown Disabled!")
-
-@bot.command()
-async def setlog(ctx, channel: discord.TextChannel):
-    global log_channel_id
-    if ctx.author.id != OWNER_ID:
-        return
-    log_channel_id = channel.id
-    await ctx.send("✅ Log channel set")
-
-@bot.command()
-async def autorole(ctx, role: discord.Role):
-    global auto_role_id
-    if ctx.author.id != OWNER_ID:
-        return
-    auto_role_id = role.id
-    await ctx.send("✅ AutoRole set")
-
-# ----------------------------
-# INFO
-# ----------------------------
-@bot.command()
-async def ping(ctx):
-    await ctx.send(f"🏓 Pong {round(bot.latency*1000)}ms")
-
-@bot.command()
-async def serverinfo(ctx):
-    g = ctx.guild
-    await ctx.send(f"📌 {g.name} | Members: {g.member_count}")
-
-@bot.command()
-async def userinfo(ctx, member: discord.Member):
-    await ctx.send(f"👤 {member} Joined: {member.joined_at.date()}")
-
-@bot.command()
-async def avatar(ctx, member: discord.Member = None):
-    member = member or ctx.author
-    await ctx.send(member.avatar.url)
+        await ctx.send("❌ Use: `!maintenance on` or `!maintenance off`")
 
 # ----------------------------
 # RUN BOT
