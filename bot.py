@@ -417,7 +417,7 @@ async def on_member_join(member: discord.Member):
             await member.add_roles(role)
         except Exception:
             pass
-
+ 
 # -----------------------------
 # Run bot
 # -----------------------------
