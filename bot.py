@@ -34,6 +34,7 @@ async def on_ready():
     global OWNER_ID
     app_info = await bot.application_info()
     OWNER_ID = app_info.owner.id
+
     print(f"✅ Bot Online: {bot.user}")
     print(f"👑 Owner Loaded: {OWNER_ID}")
 
@@ -210,8 +211,7 @@ class HelpButtons(discord.ui.View):
             interaction,
             "👑 Owner Commands",
             "`!wl @user` ➝ Whitelist user\n"
-            "`!maintenance on` ➝ Private Server\n"
-            "`!maintenance off` ➝ Public Server\n"
+            "`!maintenance on/off` ➝ Private/Public Server\n"
             "`!setlog #channel` ➝ Set log channel\n"
         )
 
@@ -221,10 +221,10 @@ class HelpButtons(discord.ui.View):
             interaction,
             "ℹ Info Commands",
             "`!ping` ➝ Bot latency\n"
-            "`!serverinfo` ➝ Server details\n"
+            "`!serverinfo` ➝ Basic server info\n"
+            "`!si` ➝ Detailed Server Info Embed\n"
             "`!userinfo @user` ➝ User info\n"
             "`!avatar` ➝ Show avatar\n"
-            "`!si` ➝ Detailed Server Info\n"
         )
 
 @bot.command()
@@ -267,7 +267,6 @@ async def timeout(ctx, member: discord.Member, time: str):
 async def wl(ctx, member: discord.Member):
     if ctx.author.id != OWNER_ID:
         return
-
     whitelist.add(member.id)
     await ctx.send("✅ User Whitelisted")
 
@@ -320,6 +319,40 @@ async def serverinfo(ctx):
     g = ctx.guild
     await ctx.send(f"📌 {g.name} | Members: {g.member_count}")
 
+# ----------------------------
+# DETAILED SERVER INFO COMMAND (!si)
+# ----------------------------
+@bot.command()
+async def si(ctx):
+    g = ctx.guild
+
+    embed = discord.Embed(
+        title=f"📌 Server Info: {g.name}",
+        color=discord.Color.red(),
+        timestamp=datetime.datetime.utcnow()
+    )
+
+    embed.set_thumbnail(url=g.icon.url if g.icon else None)
+
+    embed.add_field(name="👑 Owner", value=g.owner.mention, inline=False)
+    embed.add_field(
+        name="🗓 Created On",
+        value=g.created_at.strftime("%d %B %Y"),
+        inline=False
+    )
+    embed.add_field(name="👥 Members", value=g.member_count, inline=True)
+    embed.add_field(name="🎭 Roles", value=len(g.roles), inline=True)
+
+    embed.add_field(
+        name="📂 Channels",
+        value=f"Text: {len(g.text_channels)}\nVoice: {len(g.voice_channels)}\nCategories: {len(g.categories)}",
+        inline=False
+    )
+
+    embed.set_footer(text=f"Server ID: {g.id}")
+
+    await ctx.send(embed=embed)
+
 @bot.command()
 async def userinfo(ctx, member: discord.Member):
     await ctx.send(f"👤 {member} Joined: {member.joined_at.date()}")
@@ -328,33 +361,6 @@ async def userinfo(ctx, member: discord.Member):
 async def avatar(ctx, member: discord.Member = None):
     member = member or ctx.author
     await ctx.send(member.avatar.url)
-
-# ----------------------------
-# DETAILED SERVER INFO COMMAND (!si)
-# ----------------------------
-@bot.command()
-async def si(ctx):
-    g = ctx.guild
-    embed = discord.Embed(
-        title=f"📌 Server Info: {g.name}",
-        color=discord.Color.red(),
-        timestamp=datetime.datetime.utcnow()
-    )
-    embed.set_thumbnail(url=g.icon.url if g.icon else None)
-
-    embed.add_field(name="👑 Owner", value=f"{g.owner.mention}", inline=False)
-    embed.add_field(name="🗓 Created On", value=g.created_at.strftime("%d %b %Y | %H:%M UTC"), inline=False)
-    embed.add_field(name="👥 Members", value=g.member_count, inline=False)
-    embed.add_field(name="📝 Roles", value=len(g.roles), inline=False)
-
-    text_channels = len(g.text_channels)
-    voice_channels = len(g.voice_channels)
-    categories = len(g.categories)
-    embed.add_field(name="📂 Channels", value=f"Text: {text_channels} | Voice: {voice_channels} | Categories: {categories}", inline=False)
-
-    embed.set_footer(text=f"Server ID: {g.id}")
-
-    await ctx.send(embed=embed)
 
 # ----------------------------
 # RUN BOT
