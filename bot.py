@@ -224,6 +224,7 @@ class HelpButtons(discord.ui.View):
             "`!serverinfo` ➝ Server details\n"
             "`!userinfo @user` ➝ User info\n"
             "`!avatar` ➝ Show avatar\n"
+            "`!si` ➝ Detailed Server Info\n"
         )
 
 @bot.command()
@@ -327,6 +328,33 @@ async def userinfo(ctx, member: discord.Member):
 async def avatar(ctx, member: discord.Member = None):
     member = member or ctx.author
     await ctx.send(member.avatar.url)
+
+# ----------------------------
+# DETAILED SERVER INFO COMMAND (!si)
+# ----------------------------
+@bot.command()
+async def si(ctx):
+    g = ctx.guild
+    embed = discord.Embed(
+        title=f"📌 Server Info: {g.name}",
+        color=discord.Color.red(),
+        timestamp=datetime.datetime.utcnow()
+    )
+    embed.set_thumbnail(url=g.icon.url if g.icon else None)
+
+    embed.add_field(name="👑 Owner", value=f"{g.owner.mention}", inline=False)
+    embed.add_field(name="🗓 Created On", value=g.created_at.strftime("%d %b %Y | %H:%M UTC"), inline=False)
+    embed.add_field(name="👥 Members", value=g.member_count, inline=False)
+    embed.add_field(name="📝 Roles", value=len(g.roles), inline=False)
+
+    text_channels = len(g.text_channels)
+    voice_channels = len(g.voice_channels)
+    categories = len(g.categories)
+    embed.add_field(name="📂 Channels", value=f"Text: {text_channels} | Voice: {voice_channels} | Categories: {categories}", inline=False)
+
+    embed.set_footer(text=f"Server ID: {g.id}")
+
+    await ctx.send(embed=embed)
 
 # ----------------------------
 # RUN BOT
