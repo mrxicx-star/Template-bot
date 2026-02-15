@@ -15,7 +15,6 @@ intents.guilds = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 bot.remove_command("help")
 
-warnings = {}
 spam_users = {}
 whitelist = set()
 
@@ -34,6 +33,7 @@ async def on_ready():
     global OWNER_ID
     app_info = await bot.application_info()
     OWNER_ID = app_info.owner.id
+
     print(f"✅ Bot Online: {bot.user}")
     print(f"👑 Owner Loaded: {OWNER_ID}")
 
@@ -74,7 +74,6 @@ async def enable_maintenance(guild):
             await channel.set_permissions(guild.default_role, view_channel=False)
         except:
             continue
-    await send_log(guild, "🛠 Maintenance Enabled (Server Private)")
 
 async def disable_maintenance(guild):
     for channel in guild.channels:
@@ -82,7 +81,6 @@ async def disable_maintenance(guild):
             await channel.set_permissions(guild.default_role, view_channel=True)
         except:
             continue
-    await send_log(guild, "✅ Maintenance Disabled (Server Public)")
 
 # ----------------------------
 # ANTI NUKE SYSTEM
@@ -111,7 +109,7 @@ async def on_guild_role_delete(role):
     await anti_nuke_action(role.guild, discord.AuditLogAction.role_delete)
 
 # ----------------------------
-# ANTI-SPAM + BADWORDS SYSTEM
+# ANTI-SPAM + BADWORDS AUTO TIMEOUT
 # ----------------------------
 @bot.event
 async def on_message(message):
@@ -119,15 +117,10 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    # ✅ FIX: Commands should never run twice
-    if message.content.startswith("!"):
-        await bot.process_commands(message)
-        return
-
     if maintenance_mode and message.author.id != OWNER_ID:
         return
 
-    # Badwords Timeout
+    # Badwords Filter
     badwords = ["fuck", "bitch", "asshole"]
     if badwords_filter and any(word in message.content.lower() for word in badwords):
         await message.delete()
@@ -139,7 +132,7 @@ async def on_message(message):
         )
         return
 
-    # Anti-Link Delete
+    # Anti-Link
     if anti_link and re.search(r"(https?://|discord\.gg/)", message.content):
         await message.delete()
         await message.channel.send(
@@ -148,7 +141,7 @@ async def on_message(message):
         )
         return
 
-    # Anti Spam Timeout
+    # Anti Spam
     user_id = message.author.id
     if user_id not in spam_users:
         spam_users[user_id] = {"count": 1, "time": datetime.datetime.utcnow()}
@@ -170,6 +163,9 @@ async def on_message(message):
     if diff > 5:
         spam_users[user_id] = {"count": 1, "time": datetime.datetime.utcnow()}
 
+    # ✅ FIXED DUPLICATE COMMAND ISSUE
+    await bot.process_commands(message)
+
 # ----------------------------
 # HELP MENU WITH BUTTONS
 # ----------------------------
@@ -184,6 +180,7 @@ class HelpButtons(discord.ui.View):
             color=discord.Color.red()
         )
         embed.set_footer(text="🚨 Ultimate Security Bot Help Menu")
+
         await interaction.response.edit_message(embed=embed, view=self)
 
     @discord.ui.button(label="🛡 Moderation", style=discord.ButtonStyle.danger)
@@ -215,7 +212,8 @@ class HelpButtons(discord.ui.View):
             interaction,
             "👑 Owner Commands",
             "`!wl @user` ➝ Whitelist user\n"
-            "`!maintenance on/off` ➝ Private/Public Server\n"
+            "`!maintenance on` ➝ Private Server\n"
+            "`!maintenance off` ➝ Public Server\n"
             "`!setlog #channel` ➝ Set log channel\n"
         )
 
@@ -225,10 +223,9 @@ class HelpButtons(discord.ui.View):
             interaction,
             "ℹ Info Commands",
             "`!ping` ➝ Bot latency\n"
-            "`!serverinfo` ➝ Server details\n"
             "`!userinfo @user` ➝ User info\n"
             "`!avatar` ➝ Show avatar\n"
-            "`!si` ➝ Full Server Info Embed\n"
+            "`!si` ➝ Detailed Server Info\n"
         )
 
 @bot.command()
@@ -239,6 +236,7 @@ async def help(ctx):
         color=discord.Color.red()
     )
     embed.set_footer(text="All Commands Working ✅")
+
     await ctx.send(embed=embed, view=HelpButtons())
 
 # ----------------------------
@@ -271,12 +269,14 @@ async def timeout(ctx, member: discord.Member, time: str):
 async def wl(ctx, member: discord.Member):
     if ctx.author.id != OWNER_ID:
         return
+
     whitelist.add(member.id)
     await ctx.send("✅ User Whitelisted")
 
 @bot.command()
 async def maintenance(ctx, mode: str):
     global maintenance_mode
+
     if ctx.author.id != OWNER_ID:
         return
 
@@ -293,6 +293,7 @@ async def maintenance(ctx, mode: str):
 async def lockdown(ctx):
     if ctx.author.id != OWNER_ID:
         return
+
     await enable_lockdown(ctx.guild)
     await ctx.send("🚨 Lockdown Enabled!")
 
@@ -300,14 +301,17 @@ async def lockdown(ctx):
 async def unlockdown(ctx):
     if ctx.author.id != OWNER_ID:
         return
+
     await disable_lockdown(ctx.guild)
     await ctx.send("✅ Lockdown Disabled!")
 
 @bot.command()
 async def setlog(ctx, channel: discord.TextChannel):
     global log_channel_id
+
     if ctx.author.id != OWNER_ID:
         return
+
     log_channel_id = channel.id
     await ctx.send("✅ Log Channel Set")
 
@@ -319,11 +323,6 @@ async def ping(ctx):
     await ctx.send(f"🏓 Pong {round(bot.latency*1000)}ms")
 
 @bot.command()
-async def serverinfo(ctx):
-    g = ctx.guild
-    await ctx.send(f"📌 {g.name} | Members: {g.member_count}")
-
-@bot.command()
 async def userinfo(ctx, member: discord.Member):
     await ctx.send(f"👤 {member} Joined: {member.joined_at.date()}")
 
@@ -332,24 +331,33 @@ async def avatar(ctx, member: discord.Member = None):
     member = member or ctx.author
     await ctx.send(member.avatar.url)
 
+# ----------------------------
+# DETAILED SERVER INFO COMMAND
+# ----------------------------
 @bot.command()
 async def si(ctx):
     g = ctx.guild
+
     embed = discord.Embed(
         title=f"📌 Server Info: {g.name}",
         color=discord.Color.red(),
         timestamp=datetime.datetime.utcnow()
     )
+
     embed.set_thumbnail(url=g.icon.url if g.icon else None)
 
-    embed.add_field(name="👑 Owner", value=f"{g.owner.mention}", inline=False)
-    embed.add_field(name="🗓 Created On", value=g.created_at.strftime("%d %b %Y"), inline=False)
+    embed.add_field(name="👑 Owner", value=g.owner.mention, inline=False)
+    embed.add_field(
+        name="🗓 Created On",
+        value=g.created_at.strftime("%d %B %Y"),
+        inline=False
+    )
     embed.add_field(name="👥 Members", value=g.member_count, inline=False)
-    embed.add_field(name="📝 Roles", value=len(g.roles), inline=False)
+    embed.add_field(name="🎭 Roles", value=len(g.roles), inline=False)
 
     embed.add_field(
         name="📂 Channels",
-        value=f"Text: {len(g.text_channels)} | Voice: {len(g.voice_channels)} | Categories: {len(g.categories)}",
+        value=f"Text: {len(g.text_channels)}\nVoice: {len(g.voice_channels)}\nCategories: {len(g.categories)}",
         inline=False
     )
 
