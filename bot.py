@@ -320,7 +320,7 @@ async def setlog(ctx, channel: discord.TextChannel):
 # ----------------------------
 @bot.command()
 async def ping(ctx):
-    await ctx.send(f"🏓 Pong {round(bot.latency*1000)}ms")
+    await ctx.send(f"@realxicx {round(bot.latency*1000)}ms")
 
 @bot.command()
 async def userinfo(ctx, member: discord.Member):
