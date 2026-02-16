@@ -145,7 +145,7 @@ async def on_message(message):
     await bot.process_commands(message)
 
 # ----------------------------
-# PAGINATED HELP MENU (Sapphire-style)
+# PAGINATED HELP MENU (Fixed)
 # ----------------------------
 class HelpPages(discord.ui.View):
     def __init__(self):
@@ -200,15 +200,19 @@ class HelpPages(discord.ui.View):
         self.page = (self.page + 1) % len(self.pages)
         await self.update_embed(interaction)
 
+# ----------------------------
+# FIXED HELP COMMAND
+# ----------------------------
 @bot.command()
 async def help(ctx):
+    view = HelpPages()
     embed = discord.Embed(
         title="Moderation Bot Help Menu",
-        description="Click buttons below to view command pages!",
+        description=view.pages[0],  # Start with page 1 content
         color=discord.Color.blue()
     )
-    embed.set_footer(text=f"Page 1/2")
-    await ctx.send(embed=embed, view=HelpPages())
+    embed.set_footer(text="Page 1/2")
+    await ctx.send(embed=embed, view=view)
 
 # ----------------------------
 # INFO COMMANDS
