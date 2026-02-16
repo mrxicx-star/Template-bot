@@ -13,7 +13,7 @@ intents.message_content = True
 intents.guilds = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
-bot.remove_command("help")  # Remove default help
+bot.remove_command("help")  # Remove all old help commands
 
 OWNER_ID = None
 log_channel_id = None
@@ -80,7 +80,7 @@ async def disable_maintenance(guild):
             continue
 
 # ----------------------------
-# ANTI NUKE SYSTEM
+# ANTI-NUKE SYSTEM
 # ----------------------------
 async def anti_nuke_action(guild, action_type):
     async for entry in guild.audit_logs(limit=1, action=action_type):
@@ -143,13 +143,12 @@ async def on_message(message):
     await bot.process_commands(message)
 
 # ----------------------------
-# HELP MENU (ONE EMBED)
+# FIXED HELP MENU (ONE EMBED ONLY)
 # ----------------------------
-class HelpPages(discord.ui.View):
+class HelpMenu(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
         self.pages = [
-            # Page 1 - Moderation Commands
             "> Use `/help <command>` to get more information\n\n"
             "> `/caseupdate`\n"
             "> `/caseclose`\n"
@@ -161,7 +160,6 @@ class HelpPages(discord.ui.View):
             "> `/unwarn`\n"
             "> `/warn`\n"
             "> `/warns`",
-            # Page 2 - Info / Utility Commands
             "> Use `/help <command>` to get more information\n\n"
             "> `/help`\n"
             "> `/info`\n"
@@ -181,7 +179,7 @@ class HelpPages(discord.ui.View):
         ]
         self.page = 0
 
-    async def update_embed(self, interaction):
+    async def update(self, interaction):
         embed = discord.Embed(
             title="Moderation Bot Help Menu",
             description=self.pages[self.page],
@@ -191,19 +189,18 @@ class HelpPages(discord.ui.View):
         await interaction.response.edit_message(embed=embed, view=self)
 
     @discord.ui.button(label="Previous Page", style=discord.ButtonStyle.primary)
-    async def previous(self, interaction, button):
+    async def previous(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.page = (self.page - 1) % len(self.pages)
-        await self.update_embed(interaction)
+        await self.update(interaction)
 
     @discord.ui.button(label="Next Page", style=discord.ButtonStyle.primary)
-    async def next(self, interaction, button):
+    async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.page = (self.page + 1) % len(self.pages)
-        await self.update_embed(interaction)
+        await self.update(interaction)
 
 @bot.command()
 async def help(ctx):
-    """Displays the fixed help menu"""
-    view = HelpPages()
+    view = HelpMenu()
     embed = discord.Embed(
         title="Moderation Bot Help Menu",
         description=view.pages[0],
