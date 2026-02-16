@@ -145,71 +145,70 @@ async def on_message(message):
     await bot.process_commands(message)
 
 # ----------------------------
-# HELP MENU (Sapphire-style)
+# PAGINATED HELP MENU (Sapphire-style)
 # ----------------------------
-class HelpButtons(discord.ui.View):
+class HelpPages(discord.ui.View):
     def __init__(self):
-        super().__init__(timeout=120)
+        super().__init__(timeout=None)
+        self.page = 0
+        self.pages = [
+            "> Use `/help <command>` to get more information\n\n"
+            "> `/caseupdate`\n"
+            "> `/caseclose`\n"
+            "> `/mute`\n"
+            "> `/namewarn`\n"
+            "> `/purge`\n"
+            "> `/setslowmode`\n"
+            "> `/unmute`\n"
+            "> `/unwarn`\n"
+            "> `/warn`\n"
+            "> `/warns`",
+            "> Use `/help <command>` to get more information\n\n"
+            "> `/help`\n"
+            "> `/info`\n"
+            "> `/list`\n"
+            "> `/avatarinfo`\n"
+            "> `/bannerinfo`\n"
+            "> `/guildbannerinfo`\n"
+            "> `/guildiconinfo`\n"
+            "> `/guildmembercount`\n"
+            "> `/guildsplashinfo`\n"
+            "> `/stickerpackinfo`\n"
+            "> `/userinfo`\n"
+            "> `/casedelete`\n"
+            "> `/caseinfo`\n"
+            "> `/caselist`\n"
+            "> `/casesplit`"
+        ]
 
-    async def update_embed(self, interaction, title, desc):
-        embed = discord.Embed(title=title, description=desc, color=discord.Color.blue())
-        embed.set_footer(text="Sapphire Bot Help Menu")
+    async def update_embed(self, interaction):
+        embed = discord.Embed(
+            title="Moderation Bot Help Menu",
+            description=self.pages[self.page],
+            color=discord.Color.blue()
+        )
+        embed.set_footer(text=f"Page {self.page + 1}/{len(self.pages)}")
         await interaction.response.edit_message(embed=embed, view=self)
 
-    @discord.ui.button(label="ℹ Info", style=discord.ButtonStyle.primary)
-    async def info(self, interaction, button):
-        await self.update_embed(
-            interaction,
-            "ℹ Info Commands",
-            "`!ping` ➝ Bot latency\n"
-            "`!userinfo @user` ➝ User info\n"
-            "`!avatar` ➝ Show avatar\n"
-            "`!si` ➝ Server info\n"
-            "`!invite` ➝ Invite the bot\n"
-        )
+    @discord.ui.button(label="Previous Page", style=discord.ButtonStyle.primary)
+    async def previous(self, interaction, button):
+        self.page = (self.page - 1) % len(self.pages)
+        await self.update_embed(interaction)
 
-    @discord.ui.button(label="🛡 Moderation", style=discord.ButtonStyle.danger)
-    async def moderation(self, interaction, button):
-        await self.update_embed(
-            interaction,
-            "🛡 Moderation Commands",
-            "`!kick @user reason` ➝ Kick member\n"
-            "`!ban @user reason` ➝ Ban member\n"
-            "`!timeout @user 10m` ➝ Timeout\n"
-            "`!lockdown` ➝ Lock server\n"
-            "`!unlockdown` ➝ Unlock server\n"
-        )
-
-    @discord.ui.button(label="🎉 Fun", style=discord.ButtonStyle.success)
-    async def fun(self, interaction, button):
-        await self.update_embed(
-            interaction,
-            "🎉 Fun Commands",
-            "`!say <text>` ➝ Repeat text\n"
-            "`!ask <question>` ➝ Ask the bot\n"
-            "`!fight @user` ➝ Simulate a fight\n"
-            "`!choose <option1> <option2>` ➝ Random choice\n"
-        )
-
-    @discord.ui.button(label="🎵 Music", style=discord.ButtonStyle.secondary)
-    async def music(self, interaction, button):
-        await self.update_embed(
-            interaction,
-            "🎵 Music Commands",
-            "`!play <url>` ➝ Play music\n"
-            "`!stop` ➝ Stop music\n"
-            "`!leaveadmin` ➝ Leave voice\n"
-        )
+    @discord.ui.button(label="Next Page", style=discord.ButtonStyle.primary)
+    async def next(self, interaction, button):
+        self.page = (self.page + 1) % len(self.pages)
+        await self.update_embed(interaction)
 
 @bot.command()
 async def help(ctx):
     embed = discord.Embed(
-        title="🚨 Sapphire Bot Help Menu",
-        description="Click buttons below to view commands!",
+        title="Moderation Bot Help Menu",
+        description="Click buttons below to view command pages!",
         color=discord.Color.blue()
     )
-    embed.set_footer(text="All Commands Working ✅")
-    await ctx.send(embed=embed, view=HelpButtons())
+    embed.set_footer(text=f"Page 1/2")
+    await ctx.send(embed=embed, view=HelpPages())
 
 # ----------------------------
 # INFO COMMANDS
