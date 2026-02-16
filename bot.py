@@ -15,6 +15,7 @@ intents.guilds = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 bot.remove_command("help")
 
+
 spam_users = {}
 whitelist = set()
 
