@@ -3,6 +3,7 @@ from discord.ext import commands
 import datetime
 import os
 import re
+import random
 
 # ----------------------------
 # BOT SETUP
@@ -15,10 +16,8 @@ intents.guilds = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 bot.remove_command("help")
 
-
 spam_users = {}
 whitelist = set()
-
 maintenance_mode = False
 anti_link = True
 badwords_filter = True
@@ -34,7 +33,6 @@ async def on_ready():
     global OWNER_ID
     app_info = await bot.application_info()
     OWNER_ID = app_info.owner.id
-
     print(f"✅ Bot Online: {bot.user}")
     print(f"👑 Owner Loaded: {OWNER_ID}")
 
@@ -89,12 +87,8 @@ async def disable_maintenance(guild):
 async def anti_nuke_action(guild, action_type):
     async for entry in guild.audit_logs(limit=1, action=action_type):
         user = entry.user
-
-        if user.bot:
+        if user.bot or user.id in whitelist:
             return
-        if user.id in whitelist:
-            return
-
         try:
             await guild.ban(user, reason="🚨 Anti-Nuke Triggered")
             await send_log(guild, f"🚨 Anti-Nuke Banned: {user}")
@@ -114,11 +108,7 @@ async def on_guild_role_delete(role):
 # ----------------------------
 @bot.event
 async def on_message(message):
-
-    if message.author.bot:
-        return
-
-    if maintenance_mode and message.author.id != OWNER_ID:
+    if message.author.bot or (maintenance_mode and message.author.id != OWNER_ID):
         return
 
     # Badwords Filter
@@ -127,19 +117,13 @@ async def on_message(message):
         await message.delete()
         until = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
         await message.author.edit(timeout=until)
-
-        await message.channel.send(
-            f"🚨 {message.author.mention} Badword detected! Timeout 5 min."
-        )
+        await message.channel.send(f"🚨 {message.author.mention} Badword detected! Timeout 5 min.")
         return
 
     # Anti-Link
     if anti_link and re.search(r"(https?://|discord\.gg/)", message.content):
         await message.delete()
-        await message.channel.send(
-            f"🚫 {message.author.mention} Links not allowed!",
-            delete_after=3
-        )
+        await message.channel.send(f"🚫 {message.author.mention} Links not allowed!", delete_after=3)
         return
 
     # Anti Spam
@@ -150,39 +134,39 @@ async def on_message(message):
         spam_users[user_id]["count"] += 1
 
     diff = (datetime.datetime.utcnow() - spam_users[user_id]["time"]).seconds
-
     if diff <= 5 and spam_users[user_id]["count"] >= 6:
         until = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
         await message.author.edit(timeout=until)
-
-        await message.channel.send(
-            f"🚨 {message.author.mention} Spam detected! Timeout 5 min."
-        )
-
+        await message.channel.send(f"🚨 {message.author.mention} Spam detected! Timeout 5 min.")
         spam_users[user_id] = {"count": 0, "time": datetime.datetime.utcnow()}
-
     if diff > 5:
         spam_users[user_id] = {"count": 1, "time": datetime.datetime.utcnow()}
 
-    # ✅ FIXED DUPLICATE COMMAND ISSUE
     await bot.process_commands(message)
 
 # ----------------------------
-# HELP MENU WITH BUTTONS
+# HELP MENU (Sapphire-style)
 # ----------------------------
 class HelpButtons(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=120)
 
     async def update_embed(self, interaction, title, desc):
-        embed = discord.Embed(
-            title=title,
-            description=desc,
-            color=discord.Color.red()
-        )
-        embed.set_footer(text="🚨 Ultimate Security Bot Help Menu")
-
+        embed = discord.Embed(title=title, description=desc, color=discord.Color.blue())
+        embed.set_footer(text="Sapphire Bot Help Menu")
         await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="ℹ Info", style=discord.ButtonStyle.primary)
+    async def info(self, interaction, button):
+        await self.update_embed(
+            interaction,
+            "ℹ Info Commands",
+            "`!ping` ➝ Bot latency\n"
+            "`!userinfo @user` ➝ User info\n"
+            "`!avatar` ➝ Show avatar\n"
+            "`!si` ➝ Server info\n"
+            "`!invite` ➝ Invite the bot\n"
+        )
 
     @discord.ui.button(label="🛡 Moderation", style=discord.ButtonStyle.danger)
     async def moderation(self, interaction, button):
@@ -191,54 +175,74 @@ class HelpButtons(discord.ui.View):
             "🛡 Moderation Commands",
             "`!kick @user reason` ➝ Kick member\n"
             "`!ban @user reason` ➝ Ban member\n"
-            "`!timeout @user 10m` ➝ Temporary mute\n"
+            "`!timeout @user 10m` ➝ Timeout\n"
             "`!lockdown` ➝ Lock server\n"
             "`!unlockdown` ➝ Unlock server\n"
         )
 
-    @discord.ui.button(label="🚨 Security", style=discord.ButtonStyle.danger)
-    async def security(self, interaction, button):
+    @discord.ui.button(label="🎉 Fun", style=discord.ButtonStyle.success)
+    async def fun(self, interaction, button):
         await self.update_embed(
             interaction,
-            "🚨 Security Protection",
-            "✅ Anti-Spam Auto Timeout (5 min)\n"
-            "✅ Badwords Auto Timeout (5 min)\n"
-            "✅ Anti-Link Delete\n"
-            "✅ Anti-Nuke Auto Ban\n"
+            "🎉 Fun Commands",
+            "`!say <text>` ➝ Repeat text\n"
+            "`!ask <question>` ➝ Ask the bot\n"
+            "`!fight @user` ➝ Simulate a fight\n"
+            "`!choose <option1> <option2>` ➝ Random choice\n"
         )
 
-    @discord.ui.button(label="👑 Owner", style=discord.ButtonStyle.danger)
-    async def owner(self, interaction, button):
+    @discord.ui.button(label="🎵 Music", style=discord.ButtonStyle.secondary)
+    async def music(self, interaction, button):
         await self.update_embed(
             interaction,
-            "👑 Owner Commands",
-            "`!wl @user` ➝ Whitelist user\n"
-            "`!maintenance on` ➝ Private Server\n"
-            "`!maintenance off` ➝ Public Server\n"
-            "`!setlog #channel` ➝ Set log channel\n"
-        )
-
-    @discord.ui.button(label="ℹ Info", style=discord.ButtonStyle.danger)
-    async def info(self, interaction, button):
-        await self.update_embed(
-            interaction,
-            "ℹ Info Commands",
-            "`!ping` ➝ Bot latency\n"
-            "`!userinfo @user` ➝ User info\n"
-            "`!avatar` ➝ Show avatar\n"
-            "`!si` ➝ Detailed Server Info\n"
+            "🎵 Music Commands",
+            "`!play <url>` ➝ Play music\n"
+            "`!stop` ➝ Stop music\n"
+            "`!leaveadmin` ➝ Leave voice\n"
         )
 
 @bot.command()
 async def help(ctx):
     embed = discord.Embed(
-        title="🚨 Ultimate Security Bot Help Menu",
-        description="Click buttons below to view commands.",
-        color=discord.Color.red()
+        title="🚨 Sapphire Bot Help Menu",
+        description="Click buttons below to view commands!",
+        color=discord.Color.blue()
     )
     embed.set_footer(text="All Commands Working ✅")
-
     await ctx.send(embed=embed, view=HelpButtons())
+
+# ----------------------------
+# INFO COMMANDS
+# ----------------------------
+@bot.command()
+async def ping(ctx):
+    await ctx.send(f"Pong! {round(bot.latency*1000)}ms")
+
+@bot.command()
+async def userinfo(ctx, member: discord.Member):
+    await ctx.send(f"👤 {member} Joined: {member.joined_at.date()}")
+
+@bot.command()
+async def avatar(ctx, member: discord.Member = None):
+    member = member or ctx.author
+    await ctx.send(member.avatar.url)
+
+@bot.command()
+async def si(ctx):
+    g = ctx.guild
+    embed = discord.Embed(
+        title=f"📌 Server Info: {g.name}",
+        color=discord.Color.blue(),
+        timestamp=datetime.datetime.utcnow()
+    )
+    embed.set_thumbnail(url=g.icon.url if g.icon else None)
+    embed.add_field(name="👑 Owner", value=g.owner.mention, inline=False)
+    embed.add_field(name="🗓 Created On", value=g.created_at.strftime("%d %B %Y"), inline=False)
+    embed.add_field(name="👥 Members", value=g.member_count, inline=False)
+    embed.add_field(name="🎭 Roles", value=len(g.roles), inline=False)
+    embed.add_field(name="📂 Channels", value=f"Text: {len(g.text_channels)}\nVoice: {len(g.voice_channels)}\nCategories: {len(g.categories)}", inline=False)
+    embed.set_footer(text=f"Server ID: {g.id}")
+    await ctx.send(embed=embed)
 
 # ----------------------------
 # MODERATION COMMANDS
@@ -263,38 +267,10 @@ async def timeout(ctx, member: discord.Member, time: str):
     await member.edit(timeout=until)
     await ctx.send(f"✅ Timed out {member.mention}")
 
-# ----------------------------
-# OWNER COMMANDS
-# ----------------------------
-@bot.command()
-async def wl(ctx, member: discord.Member):
-    if ctx.author.id != OWNER_ID:
-        return
-
-    whitelist.add(member.id)
-    await ctx.send("✅ User Whitelisted")
-
-@bot.command()
-async def maintenance(ctx, mode: str):
-    global maintenance_mode
-
-    if ctx.author.id != OWNER_ID:
-        return
-
-    if mode.lower() == "on":
-        maintenance_mode = True
-        await enable_maintenance(ctx.guild)
-        await ctx.send("🛠 Maintenance ON (Server Private)")
-    else:
-        maintenance_mode = False
-        await disable_maintenance(ctx.guild)
-        await ctx.send("✅ Maintenance OFF (Server Public)")
-
 @bot.command()
 async def lockdown(ctx):
     if ctx.author.id != OWNER_ID:
         return
-
     await enable_lockdown(ctx.guild)
     await ctx.send("🚨 Lockdown Enabled!")
 
@@ -302,69 +278,55 @@ async def lockdown(ctx):
 async def unlockdown(ctx):
     if ctx.author.id != OWNER_ID:
         return
-
     await disable_lockdown(ctx.guild)
     await ctx.send("✅ Lockdown Disabled!")
 
-@bot.command()
-async def setlog(ctx, channel: discord.TextChannel):
-    global log_channel_id
-
-    if ctx.author.id != OWNER_ID:
-        return
-
-    log_channel_id = channel.id
-    await ctx.send("✅ Log Channel Set")
-
 # ----------------------------
-# INFO COMMANDS
+# FUN COMMANDS
 # ----------------------------
 @bot.command()
-async def ping(ctx):
-    await ctx.send(f"@realxicx {round(bot.latency*1000)}ms")
+async def say(ctx, *, text):
+    await ctx.send(text)
 
 @bot.command()
-async def userinfo(ctx, member: discord.Member):
-    await ctx.send(f"👤 {member} Joined: {member.joined_at.date()}")
+async def ask(ctx, *, question):
+    responses = ["Yes ✅", "No ❌", "Maybe 🤔", "Absolutely! 😎"]
+    await ctx.send(f"{random.choice(responses)}")
 
 @bot.command()
-async def avatar(ctx, member: discord.Member = None):
-    member = member or ctx.author
-    await ctx.send(member.avatar.url)
+async def fight(ctx, member: discord.Member):
+    outcomes = ["wins 🏆", "loses 💀", "ties 🤝"]
+    await ctx.send(f"{ctx.author.mention} {random.choice(outcomes)} against {member.mention}")
+
+@bot.command()
+async def choose(ctx, *, options):
+    opts = options.split()
+    if len(opts) < 2:
+        await ctx.send("Provide at least 2 options!")
+    else:
+        await ctx.send(f"I choose: {random.choice(opts)}")
 
 # ----------------------------
-# DETAILED SERVER INFO COMMAND
+# MUSIC PLACEHOLDER COMMANDS
 # ----------------------------
 @bot.command()
-async def si(ctx):
-    g = ctx.guild
+async def play(ctx, *, url):
+    await ctx.send(f"Playing music from: {url}")
 
-    embed = discord.Embed(
-        title=f"📌 Server Info: {g.name}",
-        color=discord.Color.red(),
-        timestamp=datetime.datetime.utcnow()
-    )
+@bot.command()
+async def stop(ctx):
+    await ctx.send("Music stopped!")
 
-    embed.set_thumbnail(url=g.icon.url if g.icon else None)
+@bot.command()
+async def leaveadmin(ctx):
+    await ctx.send("Leaving voice channel...")
 
-    embed.add_field(name="👑 Owner", value=g.owner.mention, inline=False)
-    embed.add_field(
-        name="🗓 Created On",
-        value=g.created_at.strftime("%d %B %Y"),
-        inline=False
-    )
-    embed.add_field(name="👥 Members", value=g.member_count, inline=False)
-    embed.add_field(name="🎭 Roles", value=len(g.roles), inline=False)
-
-    embed.add_field(
-        name="📂 Channels",
-        value=f"Text: {len(g.text_channels)}\nVoice: {len(g.voice_channels)}\nCategories: {len(g.categories)}",
-        inline=False
-    )
-
-    embed.set_footer(text=f"Server ID: {g.id}")
-
-    await ctx.send(embed=embed)
+# ----------------------------
+# UTILITY
+# ----------------------------
+@bot.command()
+async def invite(ctx):
+    await ctx.send("Invite Sapphire Bot: <invite link>")
 
 # ----------------------------
 # RUN BOT
