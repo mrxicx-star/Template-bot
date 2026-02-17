@@ -1,7 +1,6 @@
 import discord
 from discord.ext import commands
 import datetime
-import asyncio
 import os
 import re
 
@@ -19,8 +18,8 @@ whitelist = set()
 maintenance_mode = False
 anti_link = True
 badwords_filter = True
-welcome_message = None
-welcome_channel = None
+greet_channel = None
+welcome_msg = "Welcome to the server!"
 
 # ----------------------------
 # BOT READY
@@ -105,6 +104,7 @@ async def on_guild_role_delete(role):
 # ----------------------------
 @bot.event
 async def on_message(message):
+    global maintenance_mode
     if message.author.bot or (maintenance_mode and message.author.id != OWNER_ID):
         return
 
@@ -142,19 +142,49 @@ async def on_message(message):
     await bot.process_commands(message)
 
 # ----------------------------
-# HELP MENU (OLD STYLE EMBED)
+# HELP MENU
 # ----------------------------
 class HelpMenu(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
         self.pages = [
-            "> Use `!help <command>` for details\n\n"
-            "> `!kick`, `!ban`, `!mute`, `!unmute`, `!timeout`, `!warn`, `!infractions`\n"
-            "> `!purge`, `!clear`, `!slowmode`, `!lock`, `!unlock`, `!nuke`\n"
-            "> `!setlog`, `!modrole`, `!autorole`, `!addrole`, `!removerole`\n"
-            "> `!tempban`, `!tempmute`, `!reason`, `!cases`, `!warn-limit`, `!softban`, `!massban`\n"
-            "> `!role-info`, `!user-info`, `!server-info`, `!whois`, `!pardon`, `!warn-clear`\n"
-            "> `!setup all`, `!greetset`, `!greetchannelset`, `!del`"
+            "> Use !help <command> to get more information\n\n"
+            "> !help\n"
+            "> !info\n"
+            "> !avatarinfo\n"
+            "> !user-info\n"
+            "> !server-info\n"
+            "> !kick\n"
+            "> !ban\n"
+            "> !mute\n"
+            "> !unmute\n"
+            "> !timeout\n"
+            "> !warn\n"
+            "> !infractions\n"
+            "> !purge\n"
+            "> !clear\n"
+            "> !slowmode\n"
+            "> !lock\n"
+            "> !unlock\n"
+            "> !nuke\n"
+            "> !setlog\n"
+            "> !modrole\n"
+            "> !autorole\n"
+            "> !addrole\n"
+            "> !removerole\n"
+            "> !tempban\n"
+            "> !tempmute\n"
+            "> !reason\n"
+            "> !cases\n"
+            "> !warn-limit\n"
+            "> !softban\n"
+            "> !massban\n"
+            "> !role-info\n"
+            "> !whois\n"
+            "> !pardon\n"
+            "> !warn-clear\n"
+            "> !setupall\n"
+            "> !greetchannelset"
         ]
         self.page = 0
 
@@ -189,71 +219,79 @@ async def help(ctx):
     await ctx.send(embed=embed, view=view)
 
 # ----------------------------
-# WELCOME MESSAGES
+# SETUP ALL
 # ----------------------------
 @bot.command()
 @commands.has_permissions(administrator=True)
-async def greetset(ctx, *, message: str):
-    global welcome_message
-    welcome_message = message
-    await ctx.send(f"✅ Welcome message set:\n{message}")
+async def setupall(ctx):
+    guild = ctx.guild
+    categories_channels = {
+        "SERVER SPAWN": [("・entrance", "text"), ("・overview", "text"), ("・server-boost", "text")],
+        "GATEWAY": [("・self-role", "text"), ("・updates", "text"), ("・starboard", "text")],
+        "IMPORTANT": [("・announces", "text"), ("・giveaway", "text"), ("・invite", "text")],
+        "YOUTUBE ZONE": [("・yt-notification", "text"), ("・suggestions", "text")],
+        "CHILL ZONE": [("・chill-chat", "text"), ("・gaming-chat", "text"), ("・toxic-chat", "text")],
+        "GAMING ZONE": [("・owo", "text"), ("・aki", "text"), ("・poki", "text")],
+        "LEVEL ZONE": [("・level-up", "text"), ("・level-chack", "text")],
+        "EVENT ZONE": [("・event", "text"), ("・event-announces", "text")],
+        "VOICE ZONE": [("General Vc", "voice"), ("Chill Vc", "voice"), ("Duo Vc", "voice"), ("Trio Vc", "voice"), ("SQuad Vc", "voice")],
+        "MUSIC ZONE": [("music-chat", "text"), ("Music Vc", "voice")],
+        "APPLICATION": [("report", "text"), ("staff-apply", "text")],
+        "STAFF ZONE": [("staff-chat", "text"), ("staff-announces", "text")],
+    }
 
-@bot.command()
-@commands.has_permissions(administrator=True)
-async def greetchannelset(ctx, channel: discord.TextChannel):
-    global welcome_channel
-    welcome_channel = channel
-    await ctx.send(f"✅ Welcome messages will be sent in {channel.mention}")
+    for cat_name, channels in categories_channels.items():
+        category = discord.utils.get(guild.categories, name=cat_name)
+        if not category:
+            category = await guild.create_category(cat_name)
+        for ch_name, ch_type in channels:
+            existing = discord.utils.get(guild.channels, name=ch_name)
+            if existing:
+                continue
+            if ch_type == "text":
+                await guild.create_text_channel(ch_name, category=category)
+            elif ch_type == "voice":
+                await guild.create_voice_channel(ch_name, category=category)
 
-@bot.event
-async def on_member_join(member):
-    global welcome_message, welcome_channel
-    if welcome_message:
-        channel = welcome_channel or member.guild.system_channel or discord.utils.get(member.guild.text_channels, name="・entrance")
-        if channel:
-            await channel.send(f"{member.mention} {welcome_message}")
+    await ctx.send("✅ Setup complete! All channels created correctly.")
 
 # ----------------------------
-# DELETE EVERYTHING
+# DELETE ALL CHANNELS / ROLES
 # ----------------------------
 @bot.command()
 @commands.has_permissions(administrator=True)
-async def delall(ctx):
-    confirm_msg = await ctx.send("⚠️ Type `yes` to delete ALL roles, channels, and categories (except @everyone).")
-
-    def check(m):
-        return m.author == ctx.author and m.content.lower() == "yes"
-
-    try:
-        await bot.wait_for("message", check=check, timeout=30)
-    except asyncio.TimeoutError:
-        return await ctx.send("❌ Delete cancelled.")
-
-    # Delete Channels
+async def deleteall(ctx):
     for channel in ctx.guild.channels:
         try:
             await channel.delete()
         except:
-            pass
-
-    # Delete Roles (except @everyone)
+            continue
     for role in ctx.guild.roles:
         if role.is_default():
             continue
         try:
             await role.delete()
         except:
-            pass
-
-    await ctx.send("✅ All channels, categories, and roles deleted.")
+            continue
+    await ctx.send("✅ All channels and roles deleted!")
 
 # ----------------------------
-# ADD ALL MODERATION COMMANDS HERE
+# GREET CHANNEL SET
 # ----------------------------
-# Example: kick, ban, mute, unmute, timeout, warn, infractions, purge, clear, slowmode, lock, unlock, nuke...
-# And all other commands you listed: setlog, modrole, autorole, addrole, removerole, tempban, tempmute, reason, cases, warn-limit, softban, massban
-# role-info, user-info, server-info, whois, pardon, warn-clear, setup all
-# (You can copy your existing implementations here, they are already merged)
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def greetchannelset(ctx, channel: discord.TextChannel = None):
+    global greet_channel
+    if channel:
+        greet_channel = channel
+        await ctx.send(f"✅ Welcome messages will be sent in {channel.mention}")
+    else:
+        await ctx.send("❌ Please specify a text channel.")
+
+@bot.event
+async def on_member_join(member):
+    if greet_channel:
+        await greet_channel.send(f"{member.mention} {welcome_msg}")
 
 # ----------------------------
 # RUN BOT
