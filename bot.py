@@ -321,6 +321,61 @@ async def unlockdown(ctx):
     await ctx.send("✅ Lockdown Disabled!")
 
 # ----------------------------
+# SERVER INFO COMMAND (!si)
+# ----------------------------
+@bot.command(name="si")
+async def serverinfo(ctx):
+    guild = ctx.guild
+
+    owner = guild.owner
+    verification = str(guild.verification_level).title()
+
+    categories = len(guild.categories)
+    text_channels = len(guild.text_channels)
+    voice_channels = len(guild.voice_channels)
+    total_channels = categories + text_channels + voice_channels
+
+    roles = len(guild.roles)
+    emojis = len(guild.emojis)
+    stickers = len(guild.stickers)
+
+    members = guild.member_count
+    created_at = guild.created_at.strftime("%d/%m/%Y %I:%M %p")
+
+    embed = discord.Embed(
+        title="📌 Server Info",
+        description=f"**{guild.name}**",
+        color=discord.Color.purple()
+    )
+
+    embed.add_field(name="👑 Owner", value=f"{owner.mention}", inline=False)
+    embed.add_field(name="🔒 Verification Level", value=f"{verification}", inline=False)
+
+    embed.add_field(name="🚀 Boost Tier", value=f"Tier {guild.premium_tier}", inline=False)
+
+    embed.add_field(name="📂 Categories", value=f"{categories}", inline=True)
+    embed.add_field(name="💬 Text Channels", value=f"{text_channels}", inline=True)
+    embed.add_field(name="🔊 Voice Channels", value=f"{voice_channels}", inline=True)
+
+    embed.add_field(name="📌 Total Channels", value=f"{total_channels}", inline=False)
+
+    embed.add_field(name="✨ Stickers", value=f"{stickers}", inline=True)
+    embed.add_field(name="😄 Emojis", value=f"{emojis}", inline=True)
+    embed.add_field(name="🎭 Roles", value=f"{roles}", inline=True)
+
+    embed.add_field(name="👥 Members", value=f"{members}", inline=False)
+
+    embed.set_footer(
+        text=f"ID: {guild.id} | Created: {created_at}"
+    )
+
+    if guild.icon:
+        embed.set_thumbnail(url=guild.icon.url)
+
+    await ctx.send(embed=embed)
+
+
+# ----------------------------
 # RUN BOT
 # ----------------------------
 bot.run(os.getenv("DISCORD_BOT_TOKEN"))
