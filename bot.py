@@ -113,6 +113,7 @@ async def kick(ctx, member: discord.Member, *, reason=None):
     await member.kick(reason=reason)
     await ctx.send(f"✅ Kicked {member} for {reason if reason else 'no reason'}.")
 
+
 @bot.command()
 async def ban(ctx, member: discord.Member, *, reason=None):
     await member.ban(reason=reason)
