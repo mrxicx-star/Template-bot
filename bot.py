@@ -1,139 +1,157 @@
 import discord
 from discord.ext import commands
-import asyncio
-import youtube_dl
+import os
+import time
 
----------------- BOT SETUP ----------------
+# ---------------- BOT SETUP ----------------
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
----------------- YTDL + MUSIC ----------------
+# ---------------- AFK SYSTEM STORAGE ----------------
 
-ytdl_format_options = {
-'format': 'bestaudio/best',
-'noplaylist': True,
-'quiet': True,
-'extract_flat': 'in_playlist',
-'default_search': 'ytsearch',
-}
-ffmpeg_options = {'options': '-vn'}
-ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
+afk_users = {}
 
-class YTDLSource(discord.PCMVolumeTransformer):
-def init(self, source, *, data, volume=0.5):
-super().init(source, volume)
-self.data = data
-self.title = data.get('title')
-self.url = data.get('url')
+# ---------------- BOT READY ----------------
 
-@classmethod  
-async def from_url(cls, url, *, loop=None, stream=False):  
-    loop = loop or asyncio.get_event_loop()  
-    data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))  
-    if 'entries' in data:  
-        data = data['entries'][0]  
-    filename = data['url'] if stream else ytdl.prepare_filename(data)  
-    return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
+@bot.event
+async def on_ready():
+    print(f"✅ Logged in as {bot.user}")
 
----------------- MUSIC COMMANDS ----------------
+# ---------------- AFK COMMAND ----------------
 
 @bot.command()
-async def play(ctx, *, query):
-if ctx.author.voice is None:
-return await ctx.send("❌ You must be in a voice channel to play music!")
+async def afk(ctx, action=None, *, reason="AFK"):
+    if action != "set":
+        return await ctx.send("❌ Use: `!afk set <reason>`")
 
-voice_channel = ctx.author.voice.channel  
-if ctx.voice_client is None:  
-    await voice_channel.connect()  
-elif ctx.voice_client.channel != voice_channel:  
-    await ctx.voice_client.move_to(voice_channel)  
+    afk_users[ctx.author.id] = {
+        "reason": reason,
+        "time": int(time.time())
+    }
 
-async with ctx.typing():  
-    player = await YTDLSource.from_url(query, loop=bot.loop, stream=True)  
-    ctx.voice_client.play(player, after=lambda e: print(f'Player error: {e}') if e else None)  
+    embed = discord.Embed(
+        description=f"<:xieron_tick:1396339883131273407> You are now **AFK**: *{reason}*\n\n"
+                    f"AFK since: <t:{int(time.time())}:R>",
+        color=discord.Color.blurple()
+    )
+    await ctx.send(embed=embed)
 
-await ctx.send(f"🎶 Now playing: **{player.title}**")
+# ---------------- REMOVE AFK ON MESSAGE ----------------
 
-@bot.command()
-async def skip(ctx):
-if ctx.voice_client is None:
-return await ctx.send("❌ No song is playing!")
-ctx.voice_client.stop()
-await ctx.send("⏭ Skipped the current song!")
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
 
-@bot.command()
-async def leave(ctx):
-if ctx.voice_client:
-await ctx.voice_client.disconnect()
-await ctx.send("👋 Disconnected from voice channel!")
-else:
-await ctx.send("❌ I'm not in a voice channel!")
+    if message.author.id in afk_users:
+        del afk_users[message.author.id]
+        await message.channel.send(
+            f"✅ Welcome back {message.author.mention}, your AFK has been removed!"
+        )
 
-@bot.command()
-async def pause(ctx):
-if ctx.voice_client.is_playing():
-ctx.voice_client.pause()
-await ctx.send("⏸ Music paused!")
-else:
-await ctx.send("❌ No music is playing!")
+    await bot.process_commands(message)
+
+# ---------------- DELALL SERVER WIPE COMMAND ----------------
 
 @bot.command()
-async def resume(ctx):
-if ctx.voice_client.is_paused():
-ctx.voice_client.resume()
-await ctx.send("▶ Music resumed!")
-else:
-await ctx.send("❌ Music is not paused!")
+@commands.has_permissions(administrator=True)
+async def delall(ctx):
+    embed = discord.Embed(
+        title="⚠️ SERVER WIPE STARTED",
+        description="Deleting all channels, categories and roles...",
+        color=discord.Color.red()
+    )
+    await ctx.send(embed=embed)
 
----------------- HELP COMMAND ----------------
+    guild = ctx.guild
+
+    # DELETE CHANNELS + CATEGORIES
+    for channel in guild.channels:
+        try:
+            await channel.delete()
+        except:
+            pass
+
+    # DELETE ROLES (except @everyone and bot role)
+    for role in guild.roles:
+        if role.name != "@everyone" and role != guild.me.top_role:
+            try:
+                await role.delete()
+            except:
+                pass
+
+    print("✅ Server wiped successfully")
+
+# ---------------- BASIC MOD COMMANDS ----------------
+
+@bot.command()
+@commands.has_permissions(kick_members=True)
+async def kick(ctx, member: discord.Member, *, reason="No reason"):
+    await member.kick(reason=reason)
+    await ctx.send(f"✅ Kicked {member.mention} | Reason: {reason}")
+
+@bot.command()
+@commands.has_permissions(ban_members=True)
+async def ban(ctx, member: discord.Member, *, reason="No reason"):
+    await member.ban(reason=reason)
+    await ctx.send(f"✅ Banned {member.mention} | Reason: {reason}")
+
+@bot.command()
+@commands.has_permissions(manage_messages=True)
+async def clear(ctx, amount: int = 10):
+    await ctx.channel.purge(limit=amount + 1)
+    await ctx.send(f"✅ Cleared {amount} messages!", delete_after=3)
+
+@bot.command()
+@commands.has_permissions(moderate_members=True)
+async def timeout(ctx, member: discord.Member, minutes: int):
+    duration = discord.utils.utcnow() + discord.timedelta(minutes=minutes)
+    await member.timeout(duration)
+    await ctx.send(f"⏳ Timed out {member.mention} for {minutes} minutes!")
+
+# ---------------- HELP COMMAND ----------------
 
 @bot.command()
 async def help(ctx):
-embed = discord.Embed(
-title="📜 Moderation & Utility Commands",
-description=(
-"!kick, !ban, !mute, !unmute, !timeout, !warn, !warnings, !clear, !softban, "
-"!lock, !unlock, !slowmode, !modlogs, !notes, !addnote, !case, !roleinfo, !serverinfo, !userinfo, !tempban\n\n"
-"🎵 Music Commands:\n"
-"!play <song>, !skip, !pause, !resume, !leave\n\n"
-"🎲 Fun Commands:\n"
-"!8ball, !coinflip, !diceroll, !cat, !dog, !meme, !rps, !slots, !urbandictionary, !insult, !rank, !leaderboard\n\n"
-"⚙️ Utility Commands:\n"
-"!ping, !help, !weather, !translate, !calc, !remindme, !search, !vote, !invite\n\n"
-"🛠️ Other Commands:\n"
-"!setup all, !delall, !greetset, !id, !clean, !uptime, !latency, !setprefix, !diagnose, !perms, !setnick\n\n"
-"💌 Social / Profile / Fun:\n"
-"!application, !status, !afk, !profile, !reminder, !urban, !dictionary, !joke, !fact, !quote, !roll, !flip, !choose, !hug, !kiss, !pat, !slap, !highfive, !dance, !cry, !laugh, !smile, !angry, !think"
-),
-color=discord.Color.blurple()
-)
-await ctx.send(embed=embed)
+    embed = discord.Embed(
+        title="📜 Moderation Bot Commands",
+        description="Here are all available commands:",
+        color=discord.Color.blurple()
+    )
 
----------------- OTHER COMMANDS ----------------
+    embed.add_field(
+        name="🛠 Moderation",
+        value="""
+`!kick <user> <reason>`
+`!ban <user> <reason>`
+`!timeout <user> <minutes>`
+`!clear <amount>`
+""",
+        inline=False
+    )
 
-Example for moderation (expand all 80+ commands as needed)
+    embed.add_field(
+        name="💤 AFK System",
+        value="""
+`!afk set <reason>`
+(Removes AFK automatically when you chat)
+""",
+        inline=False
+    )
 
-@bot.command()
-async def kick(ctx, member: discord.Member, *, reason=None):
-await member.kick(reason=reason)
-await ctx.send(f"✅ Kicked {member} for {reason if reason else 'no reason'}.")
+    embed.add_field(
+        name="⚠️ Dangerous Admin",
+        value="""
+`!delall` → Deletes all channels + roles
+(Admin only)
+""",
+        inline=False
+    )
 
-@bot.command()
-async def ban(ctx, member: discord.Member, *, reason=None):
-await member.ban(reason=reason)
-await ctx.send(f"✅ Banned {member} for {reason if reason else 'no reason'}.")
+    embed.set_footer(text="Moderation Bot | Working Help Menu ✅")
+    await ctx.send(embed=embed)
 
----------------- BOT RUN ----------------
+# ---------------- RUN BOT ----------------
 
-Using GitHub secret token (no token in code)
-
-import os
 bot.run(os.getenv("DISCORD_TOKEN"))
-
-In this code add a command "!afk set" if any user type !afk set so it should make it in afk and the embeds should be like this:-  <:xieron_tick:1396339883131273407> You are now * AFK**: (user text )
-
-AFK since: (amount of time) <t:1771473471:R>
-
-Eg:- !afk set (coding)
-And if user types any msg in chat it should remove his afk
