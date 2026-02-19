@@ -2,10 +2,15 @@ import discord
 from discord.ext import commands
 import asyncio
 import youtube_dl
+import time
+import os
 
 # ---------------- BOT SETUP ----------------
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
+
+# ---------------- AFK SYSTEM ----------------
+afk_users = {}
 
 # ---------------- YTDL + MUSIC ----------------
 ytdl_format_options = {
@@ -28,9 +33,12 @@ class YTDLSource(discord.PCMVolumeTransformer):
     @classmethod
     async def from_url(cls, url, *, loop=None, stream=False):
         loop = loop or asyncio.get_event_loop()
-        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
+        data = await loop.run_in_executor(
+            None, lambda: ytdl.extract_info(url, download=not stream)
+        )
         if 'entries' in data:
             data = data['entries'][0]
+
         filename = data['url'] if stream else ytdl.prepare_filename(data)
         return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
 
@@ -48,7 +56,9 @@ async def play(ctx, *, query):
 
     async with ctx.typing():
         player = await YTDLSource.from_url(query, loop=bot.loop, stream=True)
-        ctx.voice_client.play(player, after=lambda e: print(f'Player error: {e}') if e else None)
+        ctx.voice_client.play(
+            player, after=lambda e: print(f'Player error: {e}') if e else None
+        )
 
     await ctx.send(f"🎶 Now playing: **{player.title}**")
 
@@ -83,43 +93,75 @@ async def resume(ctx):
     else:
         await ctx.send("❌ Music is not paused!")
 
+# ---------------- AFK COMMAND ----------------
+@bot.command()
+async def afk(ctx, action=None, *, reason="No reason given"):
+    if action != "set":
+        return await ctx.send("❌ Use: `!afk set <reason>`")
+
+    afk_users[ctx.author.id] = {
+        "reason": reason,
+        "since": int(time.time())
+    }
+
+    embed = discord.Embed(
+        description=(
+            f"<:xieron_tick:1396339883131273407> You are now **AFK**: **({reason})**\n\n"
+            f"**AFK since:** <t:{afk_users[ctx.author.id]['since']}:R>"
+        ),
+        color=discord.Color.blurple()
+    )
+
+    await ctx.send(embed=embed)
+
 # ---------------- HELP COMMAND ----------------
 @bot.command()
 async def help(ctx):
     embed = discord.Embed(
         title="📜 Moderation & Utility Commands",
         description=(
-            "!kick, !ban, !mute, !unmute, !timeout, !warn, !warnings, !clear, !softban, "
-            "!lock, !unlock, !slowmode, !modlogs, !notes, !addnote, !case, !roleinfo, !serverinfo, !userinfo, !tempban\n\n"
+            "!kick, !ban, !mute, !unmute, !timeout, !warn, !warnings, !clear\n\n"
             "🎵 Music Commands:\n"
             "!play <song>, !skip, !pause, !resume, !leave\n\n"
-            "🎲 Fun Commands:\n"
-            "!8ball, !coinflip, !diceroll, !cat, !dog, !meme, !rps, !slots, !urbandictionary, !insult, !rank, !leaderboard\n\n"
-            "⚙️ Utility Commands:\n"
-            "!ping, !help, !weather, !translate, !calc, !remindme, !search, !vote, !invite\n\n"
-            "🛠️ Other Commands:\n"
-            "!setup all, !delall, !greetset, !id, !clean, !uptime, !latency, !setprefix, !diagnose, !perms, !setnick\n\n"
-            "💌 Social / Profile / Fun:\n"
-            "!application, !status, !afk, !profile, !reminder, !urban, !dictionary, !joke, !fact, !quote, !roll, !flip, !choose, !hug, !kiss, !pat, !slap, !highfive, !dance, !cry, !laugh, !smile, !angry, !think"
+            "💤 AFK Command:\n"
+            "!afk set <reason>\n"
         ),
         color=discord.Color.blurple()
     )
     await ctx.send(embed=embed)
 
-# ---------------- OTHER COMMANDS ----------------
-# Example for moderation (expand all 80+ commands as needed)
+# ---------------- MODERATION COMMANDS ----------------
 @bot.command()
 async def kick(ctx, member: discord.Member, *, reason=None):
     await member.kick(reason=reason)
     await ctx.send(f"✅ Kicked {member} for {reason if reason else 'no reason'}.")
-
 
 @bot.command()
 async def ban(ctx, member: discord.Member, *, reason=None):
     await member.ban(reason=reason)
     await ctx.send(f"✅ Banned {member} for {reason if reason else 'no reason'}.")
 
+# ---------------- AUTO REMOVE AFK ----------------
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+
+    # Remove AFK when user sends a message
+    if message.author.id in afk_users:
+        afk_users.pop(message.author.id)
+
+        embed = discord.Embed(
+            description=(
+                f"👋 Welcome back {message.author.mention}!\n"
+                f"Your AFK status has been removed."
+            ),
+            color=discord.Color.green()
+        )
+
+        await message.channel.send(embed=embed)
+
+    await bot.process_commands(message)
+
 # ---------------- BOT RUN ----------------
-# Using GitHub secret token (no token in code)
-import os
 bot.run(os.getenv("DISCORD_TOKEN"))
